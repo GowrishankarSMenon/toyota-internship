@@ -4,6 +4,19 @@ A highly scalable, asynchronous web application designed to automate the ingesti
 
 This project was built as a submission for the **Nippon Toyota Internship Practical Evaluation (Task 1)**.
 
+## 🏗️ System Architecture
+
+![AEPP System Architecture](images/aepp_architecture.svg)
+*High-level system architecture and data flow mapping the core processing pipeline.*
+
+<details>
+<summary><strong>View Initial Concept Sketch</strong></summary>
+<br>
+
+![Initial Architecture Sketch](images/initial-sketch.png)
+
+</details>
+
 ## 🚀 Enterprise Engineering Focus
 Unlike standard synchronous CRUD applications, AEPP is engineered to handle massive throughput (scaling from 50 to 1,000+ employees) without memory bottlenecks or third-party rate-limit rejections.
 
