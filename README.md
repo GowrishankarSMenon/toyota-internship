@@ -9,9 +9,6 @@ This project was built as a submission for the **Nippon Toyota Internship Practi
 ![AEPP System Architecture](images/aepp_architecture.svg)
 *High-level system architecture and data flow mapping the core processing pipeline.*
 
-<details>
-<summary><strong>View Initial Concept Sketch</strong></summary>
-<br>
 
 ![Initial Architecture Sketch](images/initial-sketch.png)
 
