@@ -40,11 +40,11 @@ Email Delivery
 
 The initial design focused on:
 
-- Worker decoupling
-- Queue based processing
-- Cloud storage integration
-- Asynchronous job execution
-- Telemetry feedback loops
+* Worker decoupling
+* Queue based processing
+* Cloud storage integration
+* Asynchronous job execution
+* Telemetry feedback loops
 
 ---
 
@@ -54,9 +54,9 @@ The initial design focused on:
 
 Heavy workloads are removed from the API request cycle.
 
-- Upload API returns immediately
-- Workers consume jobs asynchronously
-- Background processing prevents request blocking
+* Upload API returns immediately
+* Workers consume jobs asynchronously
+* Background processing prevents request blocking
 
 ---
 
@@ -64,10 +64,10 @@ Heavy workloads are removed from the API request cycle.
 
 Redis queues are used to distribute workloads between:
 
-- Upload handlers
-- Worker nodes
-- PDF generation tasks
-- Email delivery tasks
+* Upload handlers
+* Worker nodes
+* PDF generation tasks
+* Email delivery tasks
 
 ---
 
@@ -75,9 +75,9 @@ Redis queues are used to distribute workloads between:
 
 Generated salary slips:
 
-- Are not permanently stored locally
-- Are uploaded to cloud storage
-- Can be accessed using temporary URLs
+* Are not permanently stored locally
+* Are uploaded to cloud storage
+* Are accessed through temporary signed URLs
 
 ---
 
@@ -85,12 +85,12 @@ Generated salary slips:
 
 The system isolates failures between:
 
-- API layer
-- Queue layer
-- Workers
-- Email services
+* API layer
+* Queue layer
+* Workers
+* Email services
 
-This prevents a single failure from crashing the entire pipeline.
+This prevents a single failure from affecting the entire pipeline.
 
 ---
 
@@ -98,28 +98,28 @@ This prevents a single failure from crashing the entire pipeline.
 
 ## Frontend
 
-- Next.js
-- Tailwind CSS
+* Next.js
+* Tailwind CSS
 
 ## Backend
 
-- FastAPI
-- SQLAlchemy
-- Alembic
-- Celery
-- PostgreSQL
+* FastAPI
+* SQLAlchemy
+* Alembic
+* Celery
+* PostgreSQL
 
 ## Infrastructure
 
-- Supabase PostgreSQL
-- Redis (Upstash)
-- AWS S3 / Storage
-- Resend / SendGrid
+* Supabase PostgreSQL
+* Redis (Upstash)
+* AWS S3 / Storage
+* Resend / SendGrid
 
 ## Testing
 
-- Pytest
-- Async Testing
+* Pytest
+* Async Testing
 
 ---
 
@@ -135,12 +135,12 @@ The database consists of three primary entities.
 
 Stores employee metadata.
 
-| Field | Purpose |
-|------|------|
-| id | Employee identifier |
-| name | Employee name |
-| email | Employee email |
-| designation | Employee role |
+| Field       | Purpose             |
+| ----------- | ------------------- |
+| id          | Employee identifier |
+| name        | Employee name       |
+| email       | Employee email      |
+| designation | Employee role       |
 
 ---
 
@@ -148,12 +148,12 @@ Stores employee metadata.
 
 Tracks upload batches.
 
-| Field | Purpose |
-|------|------|
-| id | Batch identifier |
-| month_year | Payroll month |
-| total_records | Number of employees |
-| status | Batch processing state |
+| Field         | Purpose                |
+| ------------- | ---------------------- |
+| id            | Batch identifier       |
+| month_year    | Payroll month          |
+| total_records | Number of employees    |
+| status        | Batch processing state |
 
 ---
 
@@ -163,11 +163,11 @@ Stores generated payroll records.
 
 Contains:
 
-- Salary components
-- Batch relationships
-- Processing status
-- Storage references
-- Error logs
+* Salary components
+* Batch relationships
+* Processing status
+* Storage references
+* Error logs
 
 ---
 
@@ -181,10 +181,10 @@ The upload endpoints were implemented with validation before database integratio
 
 ### Implemented
 
-- CSV validation
-- File type validation
-- Batch creation logic
-- Async API testing
+* CSV validation
+* File type validation
+* Batch creation logic
+* Async API testing
 
 ### Test Execution
 
@@ -210,10 +210,10 @@ Example output:
 
 Implemented:
 
-- PostgreSQL schema
-- SQLAlchemy models
-- Alembic migrations
-- Batch tracking
+* PostgreSQL schema
+* SQLAlchemy models
+* Alembic migrations
+* Batch tracking
 
 Run migrations:
 
@@ -249,10 +249,40 @@ HTTP 202 Accepted
 
 This confirms:
 
-- Validation succeeded
-- Database insertion succeeded
-- Batch creation succeeded
-- Processing moved to background systems
+* Validation succeeded
+* Database insertion succeeded
+* Batch creation succeeded
+* Processing moved to background systems
+
+---
+
+## Phase 4 — Payload Engine (PDF & Cloud Storage)
+
+The asynchronous worker fetches database records, generates salary slips, and stores them securely.
+
+### Implemented
+
+* In-memory PDF generation (`reportlab`)
+* AWS S3 integration (`boto3`)
+* Presigned URL generation
+* Async database connection handling
+
+### Worker Execution Proof
+
+```text
+[WORKER] Picked up job for batch: e316a707-b11b-495e-a28a-ff2d39993107
+[WORKER] Found 2 records for Batch... Starting generation...
+[WORKER] S3 Upload Success -> john@example.com
+[WORKER] S3 Upload Success -> jane@example.com
+[WORKER] Batch processing successfully completed.
+```
+
+This confirms:
+
+* Worker booted successfully
+* PDFs generated in memory
+* Cloud storage integration succeeded
+* Artifacts stored securely
 
 ---
 
@@ -263,11 +293,8 @@ EMPLOYEE_MAILER/
 
 ├── backend/
 │   ├── alembic/
-│   │
 │   ├── app/
-│   │
 │   ├── tests/
-│   │
 │   ├── .env
 │   ├── alembic.ini
 │   ├── conftest.py
@@ -292,17 +319,17 @@ EMPLOYEE_MAILER/
 
 Install:
 
-- Python 3.10+
-- PostgreSQL
-- Redis
-- Node.js (if frontend used)
+* Python 3.10+
+* PostgreSQL
+* Redis
+* Node.js (if frontend used)
 
 Create accounts for:
 
-- Supabase
-- Upstash
-- AWS (optional)
-- Resend / SendGrid
+* Supabase
+* Upstash
+* AWS
+* Resend / SendGrid
 
 ---
 
@@ -357,15 +384,17 @@ DATABASE_URL=
 
 REDIS_URL=
 
-SUPABASE_URL=
+AWS_ACCESS_KEY_ID=
 
-SUPABASE_KEY=
+AWS_SECRET_ACCESS_KEY=
 
-AWS_ACCESS_KEY=
+AWS_REGION=
 
-AWS_SECRET_KEY=
+S3_BUCKET_NAME=
 
 EMAIL_API_KEY=
+
+FROM_EMAIL=
 ```
 
 ---
@@ -412,11 +441,11 @@ pytest -v
 
 # Future Improvements
 
-- Dead Letter Queue support
-- Worker autoscaling
-- Dashboard telemetry
-- Progress tracking UI
-- Multi-tenant payroll support
+* Dead Letter Queue support
+* Worker autoscaling
+* Dashboard telemetry
+* Progress tracking UI
+* Multi-tenant payroll support
 
 ---
 
