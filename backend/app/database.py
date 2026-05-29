@@ -1,31 +1,31 @@
 import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Load environment variables from the .env file
 load_dotenv()
 
-# We look for a test database URL first, otherwise default to the live database
-DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL", 
-    os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is missing in .env")
+
+# Pass the raw URL directly to SQLAlchemy (No '%%' escaping needed here)
+engine = create_async_engine(
+    DATABASE_URL,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
 )
 
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable is not set!")
-
-engine = create_async_engine(DATABASE_URL, echo=False, future=True)
-
-AsyncSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
+SessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
 )
 
 Base = declarative_base()
 
 async def get_db():
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    async with SessionLocal() as session:
+        yield session
