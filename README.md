@@ -1,52 +1,425 @@
-### 🧪 Automated Testing (TDD)
-This project enforces Test-Driven Development (TDD). The backend test suite utilizes `pytest` with `pytest-asyncio` for asynchronous endpoint testing. 
+# Asynchronous Enterprise Payroll Pipeline (AEPP)
 
-An isolated test database (`aepp_test_db`) is dynamically spun up and torn down during the test lifecycle to ensure data integrity.
+AEPP is an asynchronous payroll processing system designed to handle bulk employee payroll uploads, generate salary slips, store generated artifacts securely, and dispatch them without blocking API requests.
 
-**To run the test suite:**
-```bash
-cd backend
-pytest -v
-```
-
-## 🏗️ System Architecture
-
-![AEPP System Architecture](images/aepp_architecture.svg)
-*High-level system architecture and data flow mapping the core processing pipeline.*
-
-
-![Initial Architecture Sketch](images/initial-sketch.png)
-
-## 🚀 Enterprise Engineering Focus
-Unlike standard synchronous CRUD applications, AEPP is engineered to handle massive throughput (scaling from 50 to 1,000+ employees) without memory bottlenecks or third-party rate-limit rejections.
-
-* **Asynchronous Worker Pools:** CPU-heavy PDF generation (Playwright) and I/O-heavy email dispatches (Resend/SendGrid) are completely decoupled from the main web server using Redis task queues.
-* **Algorithmic Rate Limiting:** Outbound emails are governed by a token-bucket algorithm to prevent IP blacklisting from SMTP providers.
-* **Zero-Trust Storage:** PDFs are never stored on local disk. They are pushed to a private AWS S3 bucket and exposed strictly via 7-day cryptographic Presigned URLs.
-* **Fault Tolerance:** Network anomalies trigger an exponential backoff system (2s, 4s, 8s) before routing completely failed jobs to a Dead Letter Queue (DLQ).
-
-## 🛠️ Technology Stack
-
-**Frontend Interface:**
-* Next.js (App Router)
-* Tailwind CSS
-
-**Backend Core:**
-* FastAPI (Python)
-* PostgreSQL (Data Ledger & State Management)
-* Redis (Message Queue)
-
-**External Services:**
-* Playwright (HTML-to-PDF Engine)
-* AWS S3 (Transient Secure Storage)
-* Resend / SendGrid (Transactional Email API)
+The system is built around queue-based processing so expensive operations such as PDF generation and email delivery execute outside the request lifecycle.
 
 ---
 
-### Step 5: The Professional Commit
-Now that the foundation is laid, let's lock it into version control. Go back to your terminal, ensure you are in the root of the project (outside the backend folder), and run these commands:
+# System Architecture
+
+![System Architecture](images/aepp_architecture.svg)
+
+The system separates request handling from expensive background processing.
+
+### Processing Flow
+
+```text
+CSV Upload
+    ↓
+FastAPI Upload Gateway
+    ↓
+Validation + Database Insert
+    ↓
+Redis Queue
+    ↓
+Background Workers
+    ↓
+PDF Generation
+    ↓
+Secure Storage
+    ↓
+Email Delivery
+```
+
+---
+
+# Initial Architecture Design
+
+![Initial Design](images/initial-sketch.png)
+
+The initial design focused on:
+
+- Worker decoupling
+- Queue based processing
+- Cloud storage integration
+- Asynchronous job execution
+- Telemetry feedback loops
+
+---
+
+# Key Features
+
+## Asynchronous Processing
+
+Heavy workloads are removed from the API request cycle.
+
+- Upload API returns immediately
+- Workers consume jobs asynchronously
+- Background processing prevents request blocking
+
+---
+
+## Queue Based Architecture
+
+Redis queues are used to distribute workloads between:
+
+- Upload handlers
+- Worker nodes
+- PDF generation tasks
+- Email delivery tasks
+
+---
+
+## Secure Document Storage
+
+Generated salary slips:
+
+- Are not permanently stored locally
+- Are uploaded to cloud storage
+- Can be accessed using temporary URLs
+
+---
+
+## Fault Isolation
+
+The system isolates failures between:
+
+- API layer
+- Queue layer
+- Workers
+- Email services
+
+This prevents a single failure from crashing the entire pipeline.
+
+---
+
+# Technology Stack
+
+## Frontend
+
+- Next.js
+- Tailwind CSS
+
+## Backend
+
+- FastAPI
+- SQLAlchemy
+- Alembic
+- Celery
+- PostgreSQL
+
+## Infrastructure
+
+- Supabase PostgreSQL
+- Redis (Upstash)
+- AWS S3 / Storage
+- Resend / SendGrid
+
+## Testing
+
+- Pytest
+- Async Testing
+
+---
+
+# Database Design
+
+![Database Schema](images/supabase_tables.png)
+
+The database consists of three primary entities.
+
+---
+
+## employees
+
+Stores employee metadata.
+
+| Field | Purpose |
+|------|------|
+| id | Employee identifier |
+| name | Employee name |
+| email | Employee email |
+| designation | Employee role |
+
+---
+
+## payroll_batches
+
+Tracks upload batches.
+
+| Field | Purpose |
+|------|------|
+| id | Batch identifier |
+| month_year | Payroll month |
+| total_records | Number of employees |
+| status | Batch processing state |
+
+---
+
+## salary_slips
+
+Stores generated payroll records.
+
+Contains:
+
+- Salary components
+- Batch relationships
+- Processing status
+- Storage references
+- Error logs
+
+---
+
+# Development Progress
+
+---
+
+## Phase 1 — API Development & Testing
+
+The upload endpoints were implemented with validation before database integration.
+
+### Implemented
+
+- CSV validation
+- File type validation
+- Batch creation logic
+- Async API testing
+
+### Test Execution
+
+![Pytest Results](images/initial_test.png)
+
+Run tests:
 
 ```bash
-git clone https://github.com/yourusername/aepp.git
-cd aepp
+cd backend
+
+pytest -v
 ```
+
+Example output:
+
+```text
+2 passed in 0.04s
+```
+
+---
+
+## Phase 2 — Database Infrastructure
+
+Implemented:
+
+- PostgreSQL schema
+- SQLAlchemy models
+- Alembic migrations
+- Batch tracking
+
+Run migrations:
+
+```bash
+alembic upgrade head
+```
+
+---
+
+## Phase 3 — Upload Pipeline Integration
+
+The API validates uploaded payroll data and immediately returns while processing continues asynchronously.
+
+### Upload Success Proof
+
+![Upload Success](images/file_updload_success.png)
+
+Example response:
+
+```json
+{
+    "message":"Batch accepted and saved to database",
+    "batch_id":"uuid",
+    "total_records":2
+}
+```
+
+Response:
+
+```text
+HTTP 202 Accepted
+```
+
+This confirms:
+
+- Validation succeeded
+- Database insertion succeeded
+- Batch creation succeeded
+- Processing moved to background systems
+
+---
+
+# Project Structure
+
+```text
+EMPLOYEE_MAILER/
+
+├── backend/
+│   ├── alembic/
+│   │
+│   ├── app/
+│   │
+│   ├── tests/
+│   │
+│   ├── .env
+│   ├── alembic.ini
+│   ├── conftest.py
+│   └── requirements.txt
+│
+├── documents/
+│
+├── images/
+│
+├── test_csv/
+│
+├── .gitignore
+│
+└── README.md
+```
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+Install:
+
+- Python 3.10+
+- PostgreSQL
+- Redis
+- Node.js (if frontend used)
+
+Create accounts for:
+
+- Supabase
+- Upstash
+- AWS (optional)
+- Resend / SendGrid
+
+---
+
+# Backend Setup
+
+Clone repository:
+
+```bash
+git clone <repository-url>
+
+cd EMPLOYEE_MAILER/backend
+```
+
+Create virtual environment:
+
+## Windows
+
+```bash
+python -m venv venv
+
+venv\Scripts\activate
+```
+
+## Linux / Mac
+
+```bash
+python -m venv venv
+
+source venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+# Configure Environment Variables
+
+Create:
+
+```text
+backend/.env
+```
+
+Example:
+
+```env
+DATABASE_URL=
+
+REDIS_URL=
+
+SUPABASE_URL=
+
+SUPABASE_KEY=
+
+AWS_ACCESS_KEY=
+
+AWS_SECRET_KEY=
+
+EMAIL_API_KEY=
+```
+
+---
+
+# Run Database Migrations
+
+```bash
+alembic upgrade head
+```
+
+---
+
+# Start FastAPI Server
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Default:
+
+```text
+http://127.0.0.1:8000
+```
+
+---
+
+# Start Workers
+
+Open another terminal:
+
+```bash
+celery -A app.celery_app worker --loglevel=info --pool=solo
+```
+
+---
+
+# Run Tests
+
+```bash
+pytest -v
+```
+
+---
+
+# Future Improvements
+
+- Dead Letter Queue support
+- Worker autoscaling
+- Dashboard telemetry
+- Progress tracking UI
+- Multi-tenant payroll support
+
+---
+
+# License
+
+MIT License
