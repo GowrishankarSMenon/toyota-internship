@@ -1,8 +1,13 @@
-# Automated Employee Payroll Pipeline (AEPP)
+### 🧪 Automated Testing (TDD)
+This project enforces Test-Driven Development (TDD). The backend test suite utilizes `pytest` with `pytest-asyncio` for asynchronous endpoint testing. 
 
-A highly scalable, asynchronous web application designed to automate the ingestion of employee payroll data, generate secure cryptographic PDF salary slips, and dispatch them via standard email protocols. 
+An isolated test database (`aepp_test_db`) is dynamically spun up and torn down during the test lifecycle to ensure data integrity.
 
-This project was built as a submission for the **Nippon Toyota Internship Practical Evaluation (Task 1)**.
+**To run the test suite:**
+```bash
+cd backend
+pytest -v
+```
 
 ## 🏗️ System Architecture
 
@@ -11,8 +16,6 @@ This project was built as a submission for the **Nippon Toyota Internship Practi
 
 
 ![Initial Architecture Sketch](images/initial-sketch.png)
-
-</details>
 
 ## 🚀 Enterprise Engineering Focus
 Unlike standard synchronous CRUD applications, AEPP is engineered to handle massive throughput (scaling from 50 to 1,000+ employees) without memory bottlenecks or third-party rate-limit rejections.
@@ -40,17 +43,10 @@ Unlike standard synchronous CRUD applications, AEPP is engineered to handle mass
 
 ---
 
-## 💻 Local Development Setup
+### Step 5: The Professional Commit
+Now that the foundation is laid, let's lock it into version control. Go back to your terminal, ensure you are in the root of the project (outside the backend folder), and run these commands:
 
-Follow these instructions to run the entire pipeline locally.
-
-### Prerequisites
-* Node.js (v18+)
-* Python (3.10+)
-* PostgreSQL (Running locally or via Docker)
-* Redis (Running locally or via Docker)
-
-### 1. Clone the Repository
 ```bash
-git clone [https://github.com/yourusername/aepp.git](https://github.com/yourusername/aepp.git)
+git clone https://github.com/yourusername/aepp.git
 cd aepp
+```
