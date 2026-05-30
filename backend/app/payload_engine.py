@@ -1,5 +1,6 @@
 import os
 import boto3
+from botocore.config import Config
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -60,7 +61,8 @@ def upload_to_s3(pdf_bytes, filename):
         's3',
         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-        region_name=os.getenv("AWS_REGION")
+        region_name=os.getenv("AWS_REGION"),
+        config=Config(signature_version='s3v4')
     )
     bucket_name = os.getenv("S3_BUCKET_NAME")
     
