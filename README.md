@@ -85,34 +85,55 @@ The original design focused on:
 
 # Database Design
 
-The system revolves around three primary entities.
+![Database Schema](images/supabase_tables.png)
+
+The system revolves around three primary entities that track employees, payroll batches, and generated salary slips.
+
+The schema is designed to maintain separation between employee metadata, batch processing state, and generated payroll artifacts.
+
+---
 
 ## employees
 
 Stores employee metadata.
 
-* Employee ID
-* Name
-* Email
-* Designation
+| Field       | Purpose             |
+| ----------- | ------------------- |
+| id          | Employee identifier |
+| name        | Employee name       |
+| email       | Employee email      |
+| designation | Employee role       |
+
+---
 
 ## payroll_batches
 
 Tracks upload lifecycle.
 
-* Batch ID
-* Status
-* Total records
-* Processing metadata
+| Field         | Purpose                       |
+| ------------- | ----------------------------- |
+| id            | Batch identifier              |
+| month_year    | Payroll month                 |
+| total_records | Number of employees processed |
+| status        | Batch processing state        |
+
+---
 
 ## salary_slips
 
-Stores generated payroll data.
+Stores generated payroll information and processing results.
+
+Contains:
 
 * Salary components
-* Storage references
+* Employee relationships
+* Batch relationships
 * Processing status
+* S3 storage references
 * Error tracking
+
+The schema allows workers to process payroll batches independently while maintaining clear auditability across uploads, document generation, and delivery states.
+
 
 ---
 
