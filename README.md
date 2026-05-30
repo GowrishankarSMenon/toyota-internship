@@ -1,16 +1,16 @@
 # Asynchronous Enterprise Payroll Pipeline (AEPP)
 
-AEPP is an asynchronous payroll processing system designed to handle bulk employee payroll uploads, generate salary slips, store generated artifacts securely, and dispatch them without blocking API requests.
+AEPP is an asynchronous payroll processing system designed to handle bulk employee payroll uploads, generate salary slips, securely store generated artifacts, and dispatch them without blocking API requests.
 
-The system is built around queue-based processing so expensive operations such as PDF generation and email delivery execute outside the request lifecycle.
+The system uses queue-based processing to move computationally expensive operations such as PDF generation and email delivery outside the request lifecycle.
 
 ---
 
-# System Architecture
+# System Architecture & Design
 
 ![System Architecture](images/aepp_architecture.svg)
 
-The system separates request handling from expensive background processing.
+The system is designed around asynchronous execution and fault isolation.
 
 ### Processing Flow
 
@@ -32,165 +32,110 @@ Secure Storage
 Email Delivery
 ```
 
+### Architecture Principles
+
+* API requests should never generate PDFs
+* Background workers should operate independently from API availability
+* Files should not persist on local storage
+* Processing status should be observable through database state
+
 ---
 
 # Initial Architecture Design
 
 ![Initial Design](images/initial-sketch.png)
 
-The initial design focused on:
+The original design focused on:
 
-* Worker decoupling
-* Queue based processing
-* Cloud storage integration
-* Asynchronous job execution
-* Telemetry feedback loops
-
----
-
-# Key Features
-
-## Asynchronous Processing
-
-Heavy workloads are removed from the API request cycle.
-
-* Upload API returns immediately
-* Workers consume jobs asynchronously
-* Background processing prevents request blocking
-
----
-
-## Queue Based Architecture
-
-Redis queues are used to distribute workloads between:
-
-* Upload handlers
-* Worker nodes
-* PDF generation tasks
-* Email delivery tasks
-
----
-
-## Secure Document Storage
-
-Generated salary slips:
-
-* Are not permanently stored locally
-* Are uploaded to cloud storage
-* Are accessed through temporary signed URLs
-
----
-
-## Fault Isolation
-
-The system isolates failures between:
-
-* API layer
-* Queue layer
-* Workers
-* Email services
-
-This prevents a single failure from affecting the entire pipeline.
+1. Worker decoupling
+2. Queue based processing
+3. Stateless document generation
+4. Processing telemetry
+5. Cloud storage integration
 
 ---
 
 # Technology Stack
 
-## Frontend
-
-* Next.js
-* Tailwind CSS
-
 ## Backend
 
 * FastAPI
-* SQLAlchemy
+* PostgreSQL
+* SQLAlchemy (Async)
 * Alembic
 * Celery
-* PostgreSQL
 
 ## Infrastructure
 
-* Supabase PostgreSQL
 * Redis (Upstash)
-* AWS S3 / Storage
-* Resend / SendGrid
+* AWS S3
+* Resend API
 
-## Testing
+## Document Generation
 
-* Pytest
-* Async Testing
+* ReportLab
+* In-memory buffer streaming
+
+## Frontend (WIP)
+
+* Next.js
+* Tailwind CSS
 
 ---
 
 # Database Design
 
-![Database Schema](images/supabase_tables.png)
-
-The database consists of three primary entities.
-
----
+The system revolves around three primary entities.
 
 ## employees
 
 Stores employee metadata.
 
-| Field       | Purpose             |
-| ----------- | ------------------- |
-| id          | Employee identifier |
-| name        | Employee name       |
-| email       | Employee email      |
-| designation | Employee role       |
-
----
+* Employee ID
+* Name
+* Email
+* Designation
 
 ## payroll_batches
 
-Tracks upload batches.
+Tracks upload lifecycle.
 
-| Field         | Purpose                |
-| ------------- | ---------------------- |
-| id            | Batch identifier       |
-| month_year    | Payroll month          |
-| total_records | Number of employees    |
-| status        | Batch processing state |
-
----
+* Batch ID
+* Status
+* Total records
+* Processing metadata
 
 ## salary_slips
 
-Stores generated payroll records.
-
-Contains:
+Stores generated payroll data.
 
 * Salary components
-* Batch relationships
-* Processing status
 * Storage references
-* Error logs
+* Processing status
+* Error tracking
 
 ---
 
-# Development Progress
+# Engineering Milestones & Implementation Proofs
 
 ---
 
-## Phase 1 — API Development & Testing
+## Phase 1 — Async API & Validation Layer
 
-The upload endpoints were implemented with validation before database integration.
+Upload endpoints were implemented using asynchronous database sessions and strict validation rules.
 
 ### Implemented
 
 * CSV validation
-* File type validation
+* MIME validation
 * Batch creation logic
-* Async API testing
+* Async testing
 
 ### Test Execution
 
 ![Pytest Results](images/initial_test.png)
 
-Run tests:
+Run:
 
 ```bash
 cd backend
@@ -198,34 +143,24 @@ cd backend
 pytest -v
 ```
 
-Example output:
+Example:
 
 ```text
 2 passed in 0.04s
 ```
 
----
+The test suite validates:
 
-## Phase 2 — Database Infrastructure
-
-Implemented:
-
-* PostgreSQL schema
-* SQLAlchemy models
-* Alembic migrations
-* Batch tracking
-
-Run migrations:
-
-```bash
-alembic upgrade head
-```
+* Accepted CSV uploads
+* Invalid file rejection
+* Database interactions
+* Async endpoint behavior
 
 ---
 
-## Phase 3 — Upload Pipeline Integration
+## Phase 2 — Decoupled Upload Gateway
 
-The API validates uploaded payroll data and immediately returns while processing continues asynchronously.
+The upload gateway validates payroll batches and immediately returns control to the client.
 
 ### Upload Success Proof
 
@@ -252,37 +187,49 @@ This confirms:
 * Validation succeeded
 * Database insertion succeeded
 * Batch creation succeeded
-* Processing moved to background systems
+* Processing moved into background systems
 
 ---
 
-## Phase 4 — Payload Engine (PDF & Cloud Storage)
+## Phase 3 — Payload Engine & Email Delivery
 
-The asynchronous worker fetches database records, generates salary slips, and stores them securely.
+Background workers fetch payroll records, generate salary slips, store artifacts, and dispatch emails.
 
-### Implemented
+### Transactional Email Delivery
 
-* In-memory PDF generation (`reportlab`)
-* AWS S3 integration (`boto3`)
-* Presigned URL generation
-* Async database connection handling
+![Email Received](images/email_recieved.png)
 
-### Worker Execution Proof
+Implemented:
 
-```text
-[WORKER] Picked up job for batch: e316a707-b11b-495e-a28a-ff2d39993107
-[WORKER] Found 2 records for Batch... Starting generation...
-[WORKER] S3 Upload Success -> john@example.com
-[WORKER] S3 Upload Success -> jane@example.com
-[WORKER] Batch processing successfully completed.
-```
+* Dynamic email templates
+* Verified sender domains
+* Queue-based delivery
+* Rate-limited dispatching
 
-This confirms:
+This demonstrates:
 
-* Worker booted successfully
-* PDFs generated in memory
-* Cloud storage integration succeeded
-* Artifacts stored securely
+* Worker-to-email integration
+* Dynamic payload rendering
+* Successful transactional delivery
+
+---
+
+### Secure PDF Access
+
+![Secure PDF Access](images/pdf_access.png)
+
+Implemented:
+
+* In-memory PDF generation
+* AWS S3 uploads
+* Temporary signed URLs
+* Private artifact storage
+
+This demonstrates:
+
+* Generated PDFs are not attached directly
+* Documents are stored privately
+* Access can expire automatically
 
 ---
 
@@ -317,25 +264,17 @@ EMPLOYEE_MAILER/
 
 ## Prerequisites
 
-Install:
-
 * Python 3.10+
 * PostgreSQL
 * Redis
-* Node.js (if frontend used)
-
-Create accounts for:
-
-* Supabase
-* Upstash
-* AWS
-* Resend / SendGrid
+* AWS Account
+* Resend API Key
 
 ---
 
-# Backend Setup
+## Backend Setup
 
-Clone repository:
+Clone:
 
 ```bash
 git clone <repository-url>
@@ -343,25 +282,25 @@ git clone <repository-url>
 cd EMPLOYEE_MAILER/backend
 ```
 
-Create virtual environment:
-
-## Windows
+Create environment:
 
 ```bash
 python -m venv venv
+```
 
+Windows:
+
+```bash
 venv\Scripts\activate
 ```
 
-## Linux / Mac
+Linux / Mac:
 
 ```bash
-python -m venv venv
-
 source venv/bin/activate
 ```
 
-Install dependencies:
+Install:
 
 ```bash
 pip install -r requirements.txt
@@ -369,7 +308,7 @@ pip install -r requirements.txt
 
 ---
 
-# Configure Environment Variables
+## Configure Environment Variables
 
 Create:
 
@@ -394,12 +333,12 @@ S3_BUCKET_NAME=
 
 EMAIL_API_KEY=
 
-FROM_EMAIL=
+VERIFIED_DOMAIN=
 ```
 
 ---
 
-# Run Database Migrations
+## Run Database Migrations
 
 ```bash
 alembic upgrade head
@@ -407,23 +346,15 @@ alembic upgrade head
 
 ---
 
-# Start FastAPI Server
+## Start FastAPI
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Default:
-
-```text
-http://127.0.0.1:8000
-```
-
 ---
 
-# Start Workers
-
-Open another terminal:
+## Start Workers
 
 ```bash
 celery -A app.celery_app worker --loglevel=info --pool=solo
@@ -431,7 +362,7 @@ celery -A app.celery_app worker --loglevel=info --pool=solo
 
 ---
 
-# Run Tests
+## Run Tests
 
 ```bash
 pytest -v
@@ -443,12 +374,10 @@ pytest -v
 
 * Dead Letter Queue support
 * Worker autoscaling
-* Dashboard telemetry
-* Progress tracking UI
+* Batch telemetry dashboard
+* Real-time progress tracking
 * Multi-tenant payroll support
 
 ---
 
-# License
-
-MIT License
+Developed by **Gowrishankar S Menon**
