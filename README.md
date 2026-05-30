@@ -35,9 +35,9 @@ Email Delivery
 ### Architecture Principles
 
 * API requests should never generate PDFs
-* Background workers should operate independently from API availability
-* Files should not persist on local storage
-* Processing status should be observable through database state
+* Background workers operate independently from API availability
+* Files do not persist on local storage
+* Processing status remains observable through database state
 
 ---
 
@@ -52,6 +52,133 @@ The original design focused on:
 3. Stateless document generation
 4. Processing telemetry
 5. Cloud storage integration
+
+---
+
+# Frontend Specifications & Architecture
+
+The frontend is designed as a decoupled client application that communicates independently with backend services.
+
+![Frontend Integration](images/initial_page.png)
+
+The dashboard provides administrators with payroll upload, validation, preview, and processing capabilities.
+
+## Tech Stack
+
+### Framework
+
+* Next.js (App Router)
+
+### Styling
+
+* Tailwind CSS v4
+
+### Components
+
+* shadcn/ui
+* Radix UI primitives
+
+### Client Side Processing
+
+* PapaParse
+
+### Icons
+
+* Lucide React
+* Custom SVGs
+
+---
+
+## Core UI Components
+
+### CsvUploader (`components/csv-uploader.tsx`)
+
+Handles three primary states:
+
+### Idle State
+
+Displays drag-and-drop upload interface.
+
+### Preview State
+
+* Parses CSV locally
+* Displays horizontally scrollable preview table
+* Allows administrator verification before submission
+
+### Processing State
+
+* Handles loading states
+* Sends files to backend APIs
+* Displays system telemetry
+
+---
+
+# Frontend Backend Integration
+
+The frontend and backend communicate through REST APIs while remaining completely decoupled.
+
+## Communication Flow
+
+### 1. Client Side Validation
+
+CSV files are parsed locally.
+
+No backend communication occurs during preview.
+
+---
+
+### 2. Data Dispatch
+
+The raw file is packaged into a FormData object.
+
+---
+
+### 3. Transmission
+
+The frontend performs a POST request to FastAPI.
+
+---
+
+### 4. Asynchronous Processing
+
+FastAPI:
+
+* Validates payload
+* Writes metadata to PostgreSQL
+* Pushes batch into Redis
+* Returns HTTP 202 immediately
+
+---
+
+## API Specification
+
+### Endpoint
+
+```text
+POST /api/v1/payroll/upload
+```
+
+### Content Type
+
+```text
+multipart/form-data
+```
+
+### Frontend Request Example
+
+```javascript
+const formData = new FormData();
+
+formData.append("file", rawFile);
+
+const response = await fetch(
+  "http://localhost:8000/api/v1/payroll/upload",
+  {
+      method: "POST",
+      body: formData,
+  }
+);
+```
 
 ---
 
@@ -76,10 +203,11 @@ The original design focused on:
 * ReportLab
 * In-memory buffer streaming
 
-## Frontend (WIP)
+## Frontend
 
 * Next.js
 * Tailwind CSS
+* shadcn/ui
 
 ---
 
@@ -87,9 +215,7 @@ The original design focused on:
 
 ![Database Schema](images/supabase_tables.png)
 
-The system revolves around three primary entities that track employees, payroll batches, and generated salary slips.
-
-The schema is designed to maintain separation between employee metadata, batch processing state, and generated payroll artifacts.
+The system revolves around three primary entities.
 
 ---
 
@@ -129,11 +255,10 @@ Contains:
 * Employee relationships
 * Batch relationships
 * Processing status
-* S3 storage references
+* Storage references
 * Error tracking
 
-The schema allows workers to process payroll batches independently while maintaining clear auditability across uploads, document generation, and delivery states.
-
+The schema enables workers to process payroll batches independently while maintaining processing visibility.
 
 ---
 
@@ -143,7 +268,7 @@ The schema allows workers to process payroll batches independently while maintai
 
 ## Phase 1 — Async API & Validation Layer
 
-Upload endpoints were implemented using asynchronous database sessions and strict validation rules.
+Upload endpoints were implemented using asynchronous database sessions and validation rules.
 
 ### Implemented
 
@@ -170,13 +295,6 @@ Example:
 2 passed in 0.04s
 ```
 
-The test suite validates:
-
-* Accepted CSV uploads
-* Invalid file rejection
-* Database interactions
-* Async endpoint behavior
-
 ---
 
 ## Phase 2 — Decoupled Upload Gateway
@@ -187,7 +305,7 @@ The upload gateway validates payroll batches and immediately returns control to 
 
 ![Upload Success](images/file_updload_success.png)
 
-Example response:
+Example:
 
 ```json
 {
@@ -214,7 +332,7 @@ This confirms:
 
 ## Phase 3 — Payload Engine & Email Delivery
 
-Background workers fetch payroll records, generate salary slips, store artifacts, and dispatch emails.
+Workers fetch payroll records, generate salary slips, store artifacts, and dispatch emails.
 
 ### Transactional Email Delivery
 
@@ -224,14 +342,14 @@ Implemented:
 
 * Dynamic email templates
 * Verified sender domains
-* Queue-based delivery
-* Rate-limited dispatching
+* Queue based delivery
+* Rate limited dispatching
 
 This demonstrates:
 
-* Worker-to-email integration
+* Worker email integration
 * Dynamic payload rendering
-* Successful transactional delivery
+* Transactional delivery
 
 ---
 
@@ -248,9 +366,9 @@ Implemented:
 
 This demonstrates:
 
-* Generated PDFs are not attached directly
-* Documents are stored privately
-* Access can expire automatically
+* Documents are not attached directly
+* Artifacts remain private
+* Access expires automatically
 
 ---
 
@@ -293,9 +411,7 @@ EMPLOYEE_MAILER/
 
 ---
 
-## Backend Setup
-
-Clone:
+## Clone Repository
 
 ```bash
 git clone <repository-url>
@@ -303,25 +419,29 @@ git clone <repository-url>
 cd EMPLOYEE_MAILER/backend
 ```
 
-Create environment:
+---
 
-```bash
-python -m venv venv
-```
+## Create Virtual Environment
 
 Windows:
 
 ```bash
+python -m venv venv
+
 venv\Scripts\activate
 ```
 
 Linux / Mac:
 
 ```bash
+python -m venv venv
+
 source venv/bin/activate
 ```
 
-Install:
+---
+
+## Install Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -375,7 +495,7 @@ uvicorn app.main:app --reload
 
 ---
 
-## Start Workers
+## Start Worker
 
 ```bash
 celery -A app.celery_app worker --loglevel=info --pool=solo
@@ -395,9 +515,9 @@ pytest -v
 
 * Dead Letter Queue support
 * Worker autoscaling
-* Batch telemetry dashboard
-* Real-time progress tracking
-* Multi-tenant payroll support
+* Real time telemetry dashboard
+* Progress tracking
+* Multi tenant payroll support
 
 ---
 
