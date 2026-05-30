@@ -2,6 +2,7 @@ import csv
 from io import StringIO
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from pydantic import ValidationError
@@ -9,11 +10,22 @@ from pydantic import ValidationError
 from app.schemas import UploadResponse, EmployeeSalaryRow
 from app.database import get_db
 from app.models import Employee, PayrollBatch, SalarySlip, BatchStatus
-from app.tasks import process_payroll_batch  # NEW IMPORT
+
+# Just import the task once from where it is defined
+from app.tasks import process_payroll_batch
 
 app = FastAPI(title="AEPP API")
 
-@app.post("/api/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# FIXED: Matched the route exactly to what the React frontend is calling
+@app.post("/api/v1/payroll/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_payroll_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
@@ -79,7 +91,7 @@ async def upload_payroll_csv(file: UploadFile = File(...), db: AsyncSession = De
     
     await db.commit()
 
-    # NEW ACTION: Push the heavy lifting to the Redis background queue
+    # Heavy lifting pushed to the Redis background queue
     process_payroll_batch.delay(str(new_batch.id))
 
     return UploadResponse(
