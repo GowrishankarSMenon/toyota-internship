@@ -14,8 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Load the .env file securely
 load_dotenv()
 
-# Import your database URL and SQLAlchemy Base models
-from app.database import DATABASE_URL
+# Import your SQLAlchemy Base models
 from app.models import Base
 
 config = context.config
@@ -25,12 +24,14 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Dynamically inject the URL into Alembic's config so we don't hardcode passwords
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is missing. Check your .env file.")
+# ALWAYS use the direct session port (5432) for Alembic on Supabase
+migration_url = os.getenv("DATABASE_URL_MIGRATION")
+
+if not migration_url:
+    raise ValueError("DATABASE_URL_MIGRATION is missing. Check your .env file.")
 
 # Escape the '%' sign so Python's configparser doesn't crash on encoded passwords
-escaped_url = DATABASE_URL.replace("%", "%%")
+escaped_url = migration_url.replace("%", "%%")
 config.set_main_option("sqlalchemy.url", escaped_url)
 
 def run_migrations_offline() -> None:
