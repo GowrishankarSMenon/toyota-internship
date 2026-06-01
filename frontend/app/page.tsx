@@ -6,6 +6,7 @@ import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { apiUrl } from "@/lib/api";
 
 import ParticleBackground from "@/components/particle-background";
 import WaveBackground from "@/components/WaveBackground";
@@ -720,7 +721,7 @@ export default function LandingPage() {
     setError(null);
     const formData = new FormData(e.currentTarget);
     try {
-      const response = await fetch("/api/organizations/", {
+      const response = await fetch(apiUrl("/api/organizations/"), {
         method: "POST",
         body: formData,
       });

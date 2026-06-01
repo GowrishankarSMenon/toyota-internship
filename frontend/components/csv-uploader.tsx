@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { apiUrl } from "@/lib/api";
 
 const LOADING_PHRASES = [
   "Establishing secure connection...",
@@ -104,7 +105,7 @@ export function CsvUploader() {
     formData.append("file", rawFile); 
 
     try {
-      const response = await fetch("/api/v1/payroll/upload", {
+      const response = await fetch(apiUrl("/api/v1/payroll/upload"), {
         method: "POST",
         body: formData,
       });
