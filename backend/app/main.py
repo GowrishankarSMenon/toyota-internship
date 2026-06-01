@@ -8,7 +8,7 @@ from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException, status, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from pydantic import ValidationError
 
@@ -27,6 +27,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def normalize_employee_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized.upper() if normalized else None
 
 # ---------------------------------------------------------
 # 1. UPLOAD EMPLOYEE ROSTER (CSV 1)
@@ -51,7 +58,9 @@ async def upload_employees(
         clean_row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
         
         # Look for the ID using any standard variation
-        emp_id = clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
+        emp_id = normalize_employee_id(
+            clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
+        )
         
         if not emp_id:
             continue # Skip completely empty rows
@@ -106,16 +115,35 @@ async def preview_payroll(
         # THE FIX: Lowercase headers
         clean_row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
         
-        emp_id = clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
+        emp_id = normalize_employee_id(
+            clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
+        )
         if not emp_id:
             continue # Skip empty rows
         
         # Fetch employee details using the Employee ID
-        result = await db.execute(select(Employee).where(Employee.id == emp_id, Employee.organization_id == organization_id))
+        result = await db.execute(
+            select(Employee).where(
+                func.upper(func.trim(Employee.id)) == emp_id,
+                Employee.organization_id == organization_id,
+            )
+        )
         employee = result.scalar_one_or_none()
         
         if not employee:
-            raise HTTPException(status_code=404, detail=f"Employee ID {emp_id} in row {row_num} not found in database. Please make sure the IDs match the Roster exactly.")
+            roster_ids_result = await db.execute(
+                select(Employee.id).where(Employee.organization_id == organization_id).order_by(Employee.id)
+            )
+            roster_ids = roster_ids_result.scalars().all()
+            sample_ids = ", ".join(roster_ids[:10]) if roster_ids else "none"
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"Employee ID {emp_id} in row {row_num} was not found for this organization. "
+                    f"Upload the roster first and make sure the payroll sheet uses the same employee IDs. "
+                    f"Current roster IDs: {sample_ids}"
+                ),
+            )
 
         # Safely extract financials
         base = float(clean_row.get("base salary", clean_row.get("base_salary", 0)))
