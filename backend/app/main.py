@@ -81,6 +81,7 @@ async def upload_employees(
     stmt = stmt.on_conflict_do_update(
         index_elements=['id'],
         set_={
+            'organization_id': stmt.excluded.organization_id,
             'name': stmt.excluded.name,
             'email': stmt.excluded.email,
             'designation': stmt.excluded.designation
