@@ -111,7 +111,7 @@ async def upload_payroll_csv(
         total_records=len(valid_records)
     )
 
-@app.post("/api/organizations/", response_model=OrganizationResponse)
+@app.post("/api/organizations", response_model=OrganizationResponse)
 async def create_organization(
     name: str = Form(...),
     address: str = Form(None),
