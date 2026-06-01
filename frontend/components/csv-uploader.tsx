@@ -104,7 +104,7 @@ export function CsvUploader() {
     formData.append("file", rawFile); 
 
     try {
-      const response = await fetch("http://localhost:8000/api/v1/payroll/upload", {
+      const response = await fetch("/api/v1/payroll/upload", {
         method: "POST",
         body: formData,
       });

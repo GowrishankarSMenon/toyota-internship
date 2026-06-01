@@ -720,7 +720,7 @@ export default function LandingPage() {
     setError(null);
     const formData = new FormData(e.currentTarget);
     try {
-      const response = await fetch("http://localhost:8000/api/organizations/", {
+      const response = await fetch("/api/organizations/", {
         method: "POST",
         body: formData,
       });
