@@ -77,7 +77,7 @@ async def upload_employees(
             continue
 
         employee_data.append({
-            "employee_id": emp_id, # <-- Changed to employee_id
+            "employee_id": emp_id,
             "organization_id": organization_id,
             "name": clean_row.get("name", "Unknown"),
             "email": clean_row.get("email", "no-email@company.com"),
@@ -92,7 +92,6 @@ async def upload_employees(
 
     stmt = pg_insert(Employee).values(employee_data)
     
-    # THE FIX: Tell Postgres to use the multi-tenant constraint to detect conflicts
     stmt = stmt.on_conflict_do_update(
         constraint='uix_org_emp_id', 
         set_={
@@ -133,7 +132,6 @@ async def preview_payroll(
         if not emp_id:
             continue
         
-        # THE FIX: Look up using Employee.employee_id
         result = await db.execute(
             select(Employee).where(
                 func.upper(func.trim(Employee.employee_id)) == emp_id,
@@ -155,7 +153,7 @@ async def preview_payroll(
         net = base + hra + allowances - deductions
 
         preview_data.append({
-            "employee_id": str(employee.id), # Pass the internal UUID to the frontend
+            "employee_id": str(employee.id), 
             "name": employee.name,
             "email": employee.email,
             "designation": employee.designation,
@@ -181,7 +179,6 @@ async def process_payroll(
     if not request.payroll_data:
         raise HTTPException(status_code=400, detail="No payroll data provided")
 
-    # Create the batch
     new_batch = PayrollBatch(
         organization_id=request.organization_id,
         month_year=request.payroll_data[0].month_year,
@@ -191,7 +188,6 @@ async def process_payroll(
     db.add(new_batch)
     await db.flush() 
 
-    # Create the slips using dot notation from the Pydantic models
     slip_objects = [
         SalarySlip(
             batch_id=new_batch.id,
@@ -206,7 +202,6 @@ async def process_payroll(
     db.add_all(slip_objects)
     await db.commit()
 
-    # Trigger Celery Worker
     process_payroll_batch.delay(str(new_batch.id))
 
     return {"message": "Automation Triggered", "batch_id": str(new_batch.id)}
@@ -225,23 +220,28 @@ async def create_organization(
 ):
     """Creates a new organization and uploads their logo to S3."""
     
-    # 1. Initialize the Organization model directly
+    # --- Check for duplicate workspace names ---
+    existing_org = await db.execute(
+        select(Organization).where(func.lower(Organization.name) == name.strip().lower())
+    )
+    if existing_org.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400, 
+            detail=f"The workspace '{name}' already exists. Please switch to 'Log In' instead."
+        )
+
     new_org = Organization(
         name=name,
         address=address,
         custom_message=custom_message
     )
 
-    # 2. Handle the Logo Upload to AWS S3
     if logo:
-        # Generate a unique filename to prevent overwriting
         file_extension = logo.filename.split(".")[-1]
         s3_key = f"logos/{uuid.uuid4()}.{file_extension}"
         
-        # Read the file bytes
         file_bytes = await logo.read()
         
-        # Upload to S3
         s3_client = get_s3_client()
         bucket_name = os.getenv("S3_BUCKET_NAME")
         
@@ -252,16 +252,18 @@ async def create_organization(
             ContentType=logo.content_type
         )
         
-        # Save the S3 path to our database model
         new_org.logo_s3_key = s3_key
 
-    # 3. Save to Database
     db.add(new_org)
     await db.commit()
     await db.refresh(new_org)
 
     return new_org
 
+
+# ---------------------------------------------------------
+# 5. LOGIN ORGANIZATION
+# ---------------------------------------------------------
 @app.post("/api/organizations/login", response_model=OrganizationResponse)
 async def login_organization(
     name: str = Form(...),
@@ -269,7 +271,6 @@ async def login_organization(
 ):
     """Logs into an existing organization by looking up its exact name."""
     
-    # Search for the organization by name (case-insensitive)
     result = await db.execute(
         select(Organization).where(func.lower(Organization.name) == name.strip().lower())
     )

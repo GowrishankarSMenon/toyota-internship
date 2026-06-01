@@ -22,7 +22,7 @@ class Organization(Base):
     __tablename__ = "organizations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
+    name = Column(String(255), unique=True, nullable=False)
     address = Column(String(512), nullable=True)
     custom_message = Column(String(512), nullable=True)
     logo_s3_key = Column(String(512), nullable=True)
