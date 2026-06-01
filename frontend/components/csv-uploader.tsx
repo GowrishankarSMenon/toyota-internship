@@ -668,7 +668,7 @@ export function CsvUploader() {
             }} 
             className="text-zinc-500 hover:text-white rounded-full text-xs tracking-wide uppercase"
           >
-            Skip to Monthly Salary Upload &rarr;
+            Skip to Monthly Salary Upload If User already uploaded &rarr;
           </Button>
         )}
       </div>
