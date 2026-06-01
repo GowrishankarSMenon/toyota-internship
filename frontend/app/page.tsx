@@ -286,12 +286,6 @@ function CustomCursor() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCROLL LINE + BRANCH
-// Fix summary:
-//   1. SVG viewBox is 600px wide, centred at cx=300, so it has 300px of room
-//      each side — branches at ±160px from centre are well within the viewBox.
-//   2. The anchor div is zero-size with overflow:visible; SVG overflows freely.
-//   3. The right column has overflow:visible (not hidden) so nothing clips.
-//   4. Branch kicks in earlier (85%) and is brighter/thicker.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ScrollCurveLine({
@@ -326,10 +320,8 @@ function ScrollCurveLine({
     if (pathRef.current) setPathLen(pathRef.current.getTotalLength());
   }, [svgH]);
 
-  // 600px wide canvas centred at cx=300
   const W = 600;
   const cx = 300;
-
   const y0 = 0;
   const y1 = svgH * 0.33;
   const y2 = svgH * 0.66;
@@ -347,7 +339,6 @@ function ScrollCurveLine({
   const rawBranchP = Math.max(0, Math.min(1, (progress - branchStart) / branchSpan));
   const branchP = enableBranching ? rawBranchP : 0;
 
-  // Once branching starts, freeze the trunk at the split point so there is no trailing stem.
   const trunkProgress = branchP > 0 ? branchStart : Math.min(progress, 1);
   const drawn = pathLen * trunkProgress;
   const dashoffset = pathLen - drawn;
@@ -359,17 +350,13 @@ function ScrollCurveLine({
     setDotPos({ x: pt.x, y: pt.y });
   }, [drawn, pathLen]);
 
-  // Branch: 85% → 96%
   const branchEased = 1 - Math.pow(1 - branchP, 3);
-
   const maxBranch = 400;
   const branchDropY = 70;
-
   const iconP = Math.max(0, Math.min(1, (progress - 0.92) / 0.08));
 
   const dotX = dotPos?.x ?? cx;
   const dotY = dotPos?.y ?? y3;
-
   const leftTipX = cx - maxBranch * branchEased;
   const leftTipY = dotY + branchDropY * branchEased;
   const rightTipX = cx + maxBranch * branchEased;
@@ -396,10 +383,7 @@ function ScrollCurveLine({
         overflow: "visible",
       }}
     >
-      {/* Dim track */}
       <path d={d} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1.5" strokeLinecap="round" />
-
-      {/* Live drawn line */}
       <path
         ref={pathRef}
         d={d}
@@ -410,92 +394,32 @@ function ScrollCurveLine({
         strokeDasharray={pathLen || 9999}
         strokeDashoffset={dashoffset}
       />
-
-      {/* ── Branch lines ── */}
       {branchEased > 0 && (
         <>
-          <path
-            d={leftBranchD}
-            fill="none"
-            stroke={`rgba(255,255,255,${0.75 * branchEased})`}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-          <path
-            d={rightBranchD}
-            fill="none"
-            stroke={`rgba(255,255,255,${0.75 * branchEased})`}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-
-          {/* Glow rings at branch tips */}
-          <circle cx={leftTipX} cy={leftTipY} r="10"
-            fill="none"
-            stroke={`rgba(255,255,255,${branchEased * 0.15})`}
-            strokeWidth="10"
-          />
-          <circle cx={leftTipX} cy={leftTipY} r="3"
-            fill={`rgba(255,255,255,${branchEased * 0.9})`}
-            style={{ filter: `drop-shadow(0 0 6px rgba(255,255,255,${branchEased}))` }}
-          />
-          <circle cx={rightTipX} cy={rightTipY} r="10"
-            fill="none"
-            stroke={`rgba(255,255,255,${branchEased * 0.15})`}
-            strokeWidth="10"
-          />
-          <circle cx={rightTipX} cy={rightTipY} r="3"
-            fill={`rgba(255,255,255,${branchEased * 0.9})`}
-            style={{ filter: `drop-shadow(0 0 6px rgba(255,255,255,${branchEased}))` }}
-          />
+          <path d={leftBranchD} fill="none" stroke={`rgba(255,255,255,${0.75 * branchEased})`} strokeWidth="1.5" strokeLinecap="round" />
+          <path d={rightBranchD} fill="none" stroke={`rgba(255,255,255,${0.75 * branchEased})`} strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx={leftTipX} cy={leftTipY} r="10" fill="none" stroke={`rgba(255,255,255,${branchEased * 0.15})`} strokeWidth="10" />
+          <circle cx={leftTipX} cy={leftTipY} r="3" fill={`rgba(255,255,255,${branchEased * 0.9})`} style={{ filter: `drop-shadow(0 0 6px rgba(255,255,255,${branchEased}))` }} />
+          <circle cx={rightTipX} cy={rightTipY} r="10" fill="none" stroke={`rgba(255,255,255,${branchEased * 0.15})`} strokeWidth="10" />
+          <circle cx={rightTipX} cy={rightTipY} r="3" fill={`rgba(255,255,255,${branchEased * 0.9})`} style={{ filter: `drop-shadow(0 0 6px rgba(255,255,255,${branchEased}))` }} />
         </>
       )}
-
-      {/* ── USER ICON at left tip ── */}
       {showUserIcon && iconP > 0 && (
-        <g
-          transform={`translate(${leftTipX - 16}, ${leftTipY + 8})`}
-          opacity={iconP}
-          style={{ filter: `drop-shadow(0 0 8px rgba(255,255,255,${iconP * 0.7}))` }}
-        >
+        <g transform={`translate(${leftTipX - 16}, ${leftTipY + 8})`} opacity={iconP} style={{ filter: `drop-shadow(0 0 8px rgba(255,255,255,${iconP * 0.7}))` }}>
           <circle cx="16" cy="8" r="6.5" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" />
           <path d="M1,28 Q1,17 16,17 Q31,17 31,28" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" strokeLinecap="round" />
-          <text x="16" y="44" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.45)" fontFamily="sans-serif" letterSpacing="0.08em">
-            EMPLOYEE
-          </text>
+          <text x="16" y="44" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.45)" fontFamily="sans-serif" letterSpacing="0.08em">EMPLOYEE</text>
         </g>
       )}
-
-      {/* ── MAIL ICON at right tip ── */}
       {showMailIcon && iconP > 0 && (
-        <g
-          transform={`translate(${rightTipX - 16}, ${rightTipY + 8})`}
-          opacity={iconP}
-          style={{ filter: `drop-shadow(0 0 8px rgba(255,255,255,${iconP * 0.7}))` }}
-        >
-          <rect x="0" y="0" width="32" height="22" rx="3"
-            fill="rgba(255,255,255,0.06)"
-            stroke="rgba(255,255,255,0.9)"
-            strokeWidth="1.4"
-          />
+        <g transform={`translate(${rightTipX - 16}, ${rightTipY + 8})`} opacity={iconP} style={{ filter: `drop-shadow(0 0 8px rgba(255,255,255,${iconP * 0.7}))` }}>
+          <rect x="0" y="0" width="32" height="22" rx="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" />
           <polyline points="0,0 16,13 32,0" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" strokeLinejoin="round" />
-          <text x="16" y="38" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.45)" fontFamily="sans-serif" letterSpacing="0.08em">
-            PAYSLIP
-          </text>
+          <text x="16" y="38" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.45)" fontFamily="sans-serif" letterSpacing="0.08em">PAYSLIP</text>
         </g>
       )}
-
-      {/* Travelling dot (hidden once branching begins to avoid a trailing endpoint) */}
       {dotPos && branchP === 0 && (
-        <circle
-          cx={dotPos.x}
-          cy={dotPos.y}
-          r="4"
-          fill="white"
-          style={{
-            filter: "drop-shadow(0 0 8px rgba(255,255,255,1)) drop-shadow(0 0 18px rgba(255,255,255,0.6))",
-          }}
-        />
+        <circle cx={dotPos.x} cy={dotPos.y} r="4" fill="white" style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,1)) drop-shadow(0 0 18px rgba(255,255,255,0.6))" }} />
       )}
     </svg>
   );
@@ -503,18 +427,9 @@ function ScrollCurveLine({
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXED NAVIGATOR
-// Rendered at position:fixed, completely outside the scroll layout.
-// Appears/disappears based on whether the scrollytelling section is in view.
-// Left-aligns to the left column of a max-w-6xl layout (matches the grid).
 // ─────────────────────────────────────────────────────────────────────────────
 
-function FixedNavigator({
-  activeIndex,
-  visible,
-}: {
-  activeIndex: number;
-  visible: boolean;
-}) {
+function FixedNavigator({ activeIndex, visible }: { activeIndex: number; visible: boolean; }) {
   const step = HOW_IT_WORKS_STEPS[activeIndex];
 
   return (
@@ -522,8 +437,6 @@ function FixedNavigator({
       style={{
         position: "fixed",
         top: "56%",
-        // Align to left column: max-w-6xl (1152px) centred, with 24px padding
-        // left col is ~46% wide. We position the card at the left edge of the viewport's content area.
         left: "max(24px, calc(50vw - 576px + 24px))",
         transform: visible ? "translateY(-50%) translateX(0)" : "translateY(-50%) translateX(-16px)",
         width: "clamp(220px, 22vw, 290px)",
@@ -544,7 +457,6 @@ function FixedNavigator({
           boxShadow: "0 0 80px rgba(255,255,255,0.05)",
         }}
       >
-        {/* Progress bar */}
         <div style={{ height: 1.5, background: "rgba(255,255,255,0.1)", borderRadius: 999, marginBottom: 20, overflow: "hidden" }}>
           <div
             style={{
@@ -556,56 +468,22 @@ function FixedNavigator({
             }}
           />
         </div>
-
         <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.32em", color: "rgb(113,113,122)", marginBottom: 12 }}>
           Live Step
         </p>
-
-        <div style={{
-          display: "inline-flex", alignItems: "center", gap: 8,
-          borderRadius: 999, border: "1px solid rgba(255,255,255,0.1)",
-          background: "rgba(255,255,255,0.05)", padding: "4px 12px",
-          fontSize: 12, color: "rgb(212,212,216)", marginBottom: 16,
-        }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 999, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", padding: "4px 12px", fontSize: 12, color: "rgb(212,212,216)", marginBottom: 16 }}>
           <span style={{ height: 6, width: 6, borderRadius: "50%", background: "white", boxShadow: "0 0 8px rgba(255,255,255,0.8)", display: "inline-block" }} />
           {step.metric}
         </div>
-
-        <h3
-          key={`nav-title-${activeIndex}`}
-          style={{
-            fontSize: 18, fontWeight: 600, letterSpacing: "-0.02em",
-            color: "white", marginBottom: 8, lineHeight: 1.25,
-            animation: "navFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) forwards",
-          }}
-        >
+        <h3 key={`nav-title-${activeIndex}`} style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.02em", color: "white", marginBottom: 8, lineHeight: 1.25, animation: "navFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) forwards" }}>
           {step.title}
         </h3>
-
-        <p
-          key={`nav-desc-${activeIndex}`}
-          style={{
-            color: "rgb(161,161,170)", lineHeight: 1.6, fontSize: 12,
-            animation: "navFadeUp 0.35s 0.05s cubic-bezier(0.22,1,0.36,1) forwards",
-            opacity: 0,
-          }}
-        >
+        <p key={`nav-desc-${activeIndex}`} style={{ color: "rgb(161,161,170)", lineHeight: 1.6, fontSize: 12, animation: "navFadeUp 0.35s 0.05s cubic-bezier(0.22,1,0.36,1) forwards", opacity: 0 }}>
           {step.description}
         </p>
-
-        {/* Step dots */}
         <div style={{ display: "flex", gap: 8, marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           {HOW_IT_WORKS_STEPS.map((_, i) => (
-            <div
-              key={i}
-              style={{
-                height: 2,
-                width: i === activeIndex ? 24 : 8,
-                borderRadius: 999,
-                background: i === activeIndex ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.15)",
-                transition: "width 0.4s cubic-bezier(0.22,1,0.36,1), background 0.4s",
-              }}
-            />
+            <div key={i} style={{ height: 2, width: i === activeIndex ? 24 : 8, borderRadius: 999, background: i === activeIndex ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.15)", transition: "width 0.4s cubic-bezier(0.22,1,0.36,1), background 0.4s" }} />
           ))}
         </div>
       </div>
@@ -624,6 +502,9 @@ export default function LandingPage() {
   const [error, setError] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [phraseIndex, setPhraseIndex] = useState(0);
+  
+  // NEW: Toggle between Create Workspace and Login Workspace
+  const [isLoginMode, setIsLoginMode] = useState(false);
 
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [lineProgress, setLineProgress] = useState(0);
@@ -668,7 +549,6 @@ export default function LandingPage() {
         const inView = r.top < window.innerHeight * 0.85 && r.bottom > window.innerHeight * 0.15;
         setMotionMode(inView);
 
-        // Show after the intro block and hide soon after the last card is passed.
         const firstCardRect = storyZoneRefs.current[0]?.getBoundingClientRect();
         const lastCardRect = storyZoneRefs.current[HOW_IT_WORKS_STEPS.length - 1]?.getBoundingClientRect();
 
@@ -715,6 +595,7 @@ export default function LandingPage() {
     };
   }, [handleScroll]);
 
+  // Handle Workspace Creation
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -726,6 +607,32 @@ export default function LandingPage() {
         body: formData,
       });
       if (!response.ok) throw new Error("Failed to provision organization. Check backend connection.");
+      const data = await response.json();
+      localStorage.setItem("aepp_org_id", data.id);
+      setIsLoading(false);
+      setIsTransitioning(true);
+      setTimeout(() => router.push("/dashboard"), 3500);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Workspace Login
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    const formData = new FormData(e.currentTarget);
+    try {
+      const response = await fetch(apiUrl("/api/organizations/login"), {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.detail || "Failed to find workspace.");
+      }
       const data = await response.json();
       localStorage.setItem("aepp_org_id", data.id);
       setIsLoading(false);
@@ -861,8 +768,6 @@ export default function LandingPage() {
 
             <div className="grid lg:grid-cols-[0.95fr_1.05fr] gap-16 items-start">
 
-              {/* Mobile navigator intentionally disabled */}
-
               {/* Desktop left column spacer — the fixed navigator floats here */}
               <div className="hidden lg:block" aria-hidden="true" />
 
@@ -872,10 +777,6 @@ export default function LandingPage() {
                 className="flex flex-col gap-6"
                 style={{ position: "relative", overflow: "visible" }}
               >
-                {/*
-                  Zero-size anchor for the SVG.
-                  overflow:visible is critical — without it the SVG branches get clipped.
-                */}
                 <div
                   style={{
                     position: "absolute",
@@ -967,52 +868,100 @@ export default function LandingPage() {
             id="get-started"
             className="w-full max-w-2xl text-left bg-[#09090b]/80 border border-white/10 rounded-[24px] p-8 md:p-12 backdrop-blur-xl"
           >
-            <div className="mb-8">
-              <h2 className="text-2xl font-semibold text-white tracking-tight">Get Started</h2>
-              <p className="text-sm text-zinc-400 mt-1">Configure your enterprise workspace to begin processing.</p>
+            {/* Form Header */}
+            <div className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-white tracking-tight">
+                  {isLoginMode ? "Workspace Login" : "Get Started"}
+                </h2>
+                <p className="text-sm text-zinc-400 mt-1">
+                  {isLoginMode 
+                    ? "Enter your company name to access your dashboard." 
+                    : "Configure your enterprise workspace to begin processing."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setIsLoginMode(!isLoginMode);
+                  setError(null);
+                }}
+                className="text-xs text-zinc-500 hover:text-white px-0 md:px-4"
+              >
+                {isLoginMode ? "Need to create a workspace?" : "Already have a workspace?"}
+              </Button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid gap-6 bg-[#121214]/70 border border-white/5 p-6 rounded-[20px]">
-                <div className="space-y-2.5">
-                  <label htmlFor="name" className="text-sm font-medium text-zinc-200">
-                    Company Name <span className="text-zinc-500">*</span>
-                  </label>
-                  <Input id="name" name="name" required placeholder="e.g., Wayne Enterprises"
-                    className="bg-white/5 border-transparent text-zinc-100 placeholder:text-zinc-600 rounded-xl h-12 focus-visible:ring-1 focus-visible:ring-white/20 px-4" />
+            {/* Conditional Form Rendering */}
+            {isLoginMode ? (
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="bg-[#121214]/70 border border-white/5 p-6 rounded-[20px]">
+                  <div className="space-y-2.5">
+                    <label htmlFor="login-name" className="text-sm font-medium text-zinc-200">
+                      Company Name <span className="text-zinc-500">*</span>
+                    </label>
+                    <Input id="login-name" name="name" required placeholder="e.g., Wayne Enterprises"
+                      className="bg-white/5 border-transparent text-zinc-100 placeholder:text-zinc-600 rounded-xl h-12 focus-visible:ring-1 focus-visible:ring-white/20 px-4" />
+                  </div>
                 </div>
-                <div className="space-y-2.5">
-                  <label htmlFor="address" className="text-sm font-medium text-zinc-200">Headquarters Address</label>
-                  <Input id="address" name="address" placeholder="e.g., 1007 Mountain Drive, Gotham"
-                    className="bg-white/5 border-transparent text-zinc-100 placeholder:text-zinc-600 rounded-xl h-12 focus-visible:ring-1 focus-visible:ring-white/20 px-4" />
-                </div>
-              </div>
+                
+                {error && (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
 
-              <div className="grid gap-6 bg-[#121214]/70 border border-white/5 p-6 rounded-[20px]">
-                <div className="space-y-2.5">
-                  <label htmlFor="custom_message" className="text-sm font-medium text-zinc-200">Custom Footer Message</label>
-                  <Input id="custom_message" name="custom_message" placeholder="e.g., Happy Holidays from the Board of Directors."
-                    className="bg-white/5 border-transparent text-zinc-100 placeholder:text-zinc-600 rounded-xl h-12 focus-visible:ring-1 focus-visible:ring-white/20 px-4" />
+                <Button type="submit" disabled={isLoading}
+                  className="w-full bg-white text-black hover:bg-zinc-200 rounded-full font-medium h-12 transition-all duration-200 text-base">
+                  {isLoading ? "Locating..." : "Enter Workspace"}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid gap-6 bg-[#121214]/70 border border-white/5 p-6 rounded-[20px]">
+                  <div className="space-y-2.5">
+                    <label htmlFor="name" className="text-sm font-medium text-zinc-200">
+                      Company Name <span className="text-zinc-500">*</span>
+                    </label>
+                    <Input id="name" name="name" required placeholder="e.g., Wayne Enterprises"
+                      className="bg-white/5 border-transparent text-zinc-100 placeholder:text-zinc-600 rounded-xl h-12 focus-visible:ring-1 focus-visible:ring-white/20 px-4" />
+                  </div>
+                  <div className="space-y-2.5">
+                    <label htmlFor="address" className="text-sm font-medium text-zinc-200">Headquarters Address</label>
+                    <Input id="address" name="address" placeholder="e.g., 1007 Mountain Drive, Gotham"
+                      className="bg-white/5 border-transparent text-zinc-100 placeholder:text-zinc-600 rounded-xl h-12 focus-visible:ring-1 focus-visible:ring-white/20 px-4" />
+                  </div>
                 </div>
-                <div className="space-y-2.5">
-                  <label htmlFor="logo" className="text-sm font-medium text-zinc-200 flex justify-between items-center">
-                    <span>Company Logo</span>
-                    <span className="text-xs text-zinc-500 font-normal">PNG or JPG</span>
-                  </label>
-                  <Input id="logo" name="logo" type="file" accept="image/png, image/jpeg"
-                    className="bg-white/5 border-transparent text-zinc-400 h-12 rounded-xl file:bg-white/10 file:text-zinc-200 file:border-0 file:mr-4 file:px-4 file:py-1 file:rounded-lg hover:file:bg-white/20 pt-2.5 px-3 focus-visible:ring-1 focus-visible:ring-white/20" />
+
+                <div className="grid gap-6 bg-[#121214]/70 border border-white/5 p-6 rounded-[20px]">
+                  <div className="space-y-2.5">
+                    <label htmlFor="custom_message" className="text-sm font-medium text-zinc-200">Custom Footer Message</label>
+                    <Input id="custom_message" name="custom_message" placeholder="e.g., Happy Holidays from the Board of Directors."
+                      className="bg-white/5 border-transparent text-zinc-100 placeholder:text-zinc-600 rounded-xl h-12 focus-visible:ring-1 focus-visible:ring-white/20 px-4" />
+                  </div>
+                  <div className="space-y-2.5">
+                    <label htmlFor="logo" className="text-sm font-medium text-zinc-200 flex justify-between items-center">
+                      <span>Company Logo</span>
+                      <span className="text-xs text-zinc-500 font-normal">PNG or JPG</span>
+                    </label>
+                    <Input id="logo" name="logo" type="file" accept="image/png, image/jpeg"
+                      className="bg-white/5 border-transparent text-zinc-400 h-12 rounded-xl file:bg-white/10 file:text-zinc-200 file:border-0 file:mr-4 file:px-4 file:py-1 file:rounded-lg hover:file:bg-white/20 pt-2.5 px-3 focus-visible:ring-1 focus-visible:ring-white/20" />
+                  </div>
                 </div>
-              </div>
 
-              {error && (
-                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>
-              )}
+                {error && (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
 
-              <Button type="submit" disabled={isLoading}
-                className="w-full bg-white text-black hover:bg-zinc-200 rounded-full font-medium h-12 transition-all duration-200 text-base">
-                {isLoading ? "Validating..." : "Create Workspace & Continue"}
-              </Button>
-            </form>
+                <Button type="submit" disabled={isLoading}
+                  className="w-full bg-white text-black hover:bg-zinc-200 rounded-full font-medium h-12 transition-all duration-200 text-base">
+                  {isLoading ? "Validating..." : "Create Workspace & Continue"}
+                </Button>
+              </form>
+            )}
           </div>
 
         </main>

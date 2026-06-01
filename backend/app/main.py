@@ -261,3 +261,24 @@ async def create_organization(
     await db.refresh(new_org)
 
     return new_org
+
+@app.post("/api/organizations/login", response_model=OrganizationResponse)
+async def login_organization(
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Logs into an existing organization by looking up its exact name."""
+    
+    # Search for the organization by name (case-insensitive)
+    result = await db.execute(
+        select(Organization).where(func.lower(Organization.name) == name.strip().lower())
+    )
+    org = result.scalar_one_or_none()
+    
+    if not org:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"No workspace found for '{name}'. Please check the spelling or create a new one."
+        )
+        
+    return org
