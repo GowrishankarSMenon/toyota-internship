@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.celery_app import celery_app
 from app.database import SessionLocal, engine
-from app.models import PayrollBatch, SalarySlip, BatchStatus
+from app.models import PayrollBatch, SalarySlip, BatchStatus, Organization
 from app.payload_engine import generate_salary_slip_pdf, upload_to_s3
 
 # Initialize Resend
@@ -18,7 +18,7 @@ VERIFIED_DOMAIN = os.getenv("VERIFIED_DOMAIN")
 # MICRO-TASK: The Rate-Limited Email Dispatcher
 # ---------------------------------------------------------
 @celery_app.task(name="send_salary_email", bind=True, max_retries=3, rate_limit="10/s")
-def send_salary_email(self, employee_name: str, employee_email: str, month_year: str, secure_url: str, manager_name: str, manager_prefix: str):
+def send_salary_email(self, employee_name: str, employee_email: str, month_year: str, secure_url: str, manager_name: str, manager_prefix: str, organization_name: str):
     """
     Sends the email using a dynamically constructed, verified sender identity.
     Limited to 10 executions per second across all workers.
@@ -39,7 +39,7 @@ def send_salary_email(self, employee_name: str, employee_email: str, month_year:
             </a>
             <br><br>
             <p>If you have any discrepancies regarding this payout, please reply directly to this email to reach me.</p>
-            <p>Best regards,<br><strong>{manager_name}</strong><br>Nippon Toyota</p>
+            <p>Best regards,<br><strong>{manager_name}</strong><br>{organization_name}</p>
         </div>
         """
 
@@ -66,7 +66,8 @@ async def _process_batch_async(batch_id: str, manager_name: str, manager_prefix:
     """Generates PDFs and fans out email tasks with dynamic sender parameters."""
     try:
         async with SessionLocal() as db:
-            stmt = select(PayrollBatch).where(PayrollBatch.id == uuid.UUID(batch_id))
+            # Eagerly load the organization data attached to this batch
+            stmt = select(PayrollBatch).where(PayrollBatch.id == uuid.UUID(batch_id)).options(selectinload(PayrollBatch.organization))
             result = await db.execute(stmt)
             batch = result.scalar_one_or_none()
 
@@ -90,8 +91,8 @@ async def _process_batch_async(batch_id: str, manager_name: str, manager_prefix:
                 employee = slip.employee
                 filename = f"salary_slips/{batch.month_year.replace(' ', '_')}/{employee.id}_{uuid.uuid4().hex[:8]}.pdf"
                 
-                # 1. Generate & Upload
-                pdf_bytes = generate_salary_slip_pdf(employee, slip, batch.month_year)
+                # 1. Generate & Upload (Passing the organization to the PDF engine)
+                pdf_bytes = generate_salary_slip_pdf(employee, slip, batch.month_year, batch.organization)
                 secure_url = upload_to_s3(pdf_bytes, filename)
                 
                 # 2. Fan-out to the Rate-Limited Email Queue
@@ -101,7 +102,8 @@ async def _process_batch_async(batch_id: str, manager_name: str, manager_prefix:
                     month_year=batch.month_year,
                     secure_url=secure_url,
                     manager_name=manager_name,
-                    manager_prefix=manager_prefix
+                    manager_prefix=manager_prefix,
+                    organization_name=batch.organization.name
                 )
                 
             batch.status = BatchStatus.COMPLETED

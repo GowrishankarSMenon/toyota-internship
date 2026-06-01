@@ -19,30 +19,44 @@ class SlipStatus(str, enum.Enum):
     EMAILED = "EMAILED"
     FAILED = "FAILED"
 
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    address = Column(String(512), nullable=True)
+    custom_message = Column(String(512), nullable=True)
+    logo_s3_key = Column(String(512), nullable=True)
+
+    # Relationships
+    employees = relationship("Employee", back_populates="organization", cascade="all, delete-orphan")
+    batches = relationship("PayrollBatch", back_populates="organization", cascade="all, delete-orphan")
+
 class Employee(Base):
     __tablename__ = "employees"
 
-    # Using String for ID to accommodate alphanumeric IDs like "EMP001"
     id = Column(String(50), primary_key=True, index=True)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
     designation = Column(String(255), nullable=False)
 
-    # Relationship to salary slips
+    # Relationships
+    organization = relationship("Organization", back_populates="employees")
     salary_slips = relationship("SalarySlip", back_populates="employee")
-
 
 class PayrollBatch(Base):
     __tablename__ = "payroll_batches"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     month_year = Column(String(20), nullable=False)  # e.g., "October 2023"
     total_records = Column(Integer, nullable=False)
     status = Column(Enum(BatchStatus), default=BatchStatus.PENDING, nullable=False)
 
-    # Relationship to individual slips in this batch
+    # Relationships
+    organization = relationship("Organization", back_populates="batches")
     salary_slips = relationship("SalarySlip", back_populates="batch", cascade="all, delete-orphan")
-
 
 class SalarySlip(Base):
     __tablename__ = "salary_slips"
