@@ -105,7 +105,8 @@ async def upload_employees(
             'organization_id': stmt.excluded.organization_id,
             'name': stmt.excluded.name,
             'email': stmt.excluded.email,
-            'designation': stmt.excluded.designation
+            'designation': stmt.excluded.designation,
+            'dob': stmt.excluded.dob # <-- Added DOB to the update statement
         }
     )
     await db.execute(stmt)
