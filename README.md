@@ -1,527 +1,861 @@
-# Asynchronous Enterprise Payroll Pipeline (AEPP)
+# 🚀 Automated Enterprise Payroll Pipeline (AEPP)
 
-AEPP is an asynchronous payroll processing system designed to handle bulk employee payroll uploads, generate salary slips, securely store generated artifacts, and dispatch them without blocking API requests.
-
-The system uses queue-based processing to move computationally expensive operations such as PDF generation and email delivery outside the request lifecycle.
+Enterprise-grade asynchronous payroll automation platform for generating, securing, storing, and distributing salary slips at scale.
 
 ---
 
-# System Architecture & Design
+# What AEPP Actually Does
 
-![System Architecture](images/aepp_architecture.svg)
+AEPP automates the complete payroll distribution workflow.
 
-The system is designed around asynchronous execution and fault isolation.
+Organizations upload employee data and monthly payroll information, and the system automatically:
 
-### Processing Flow
+- Parses uploaded payroll CSV files
+- Validates employee and salary records
+- Generates encrypted salary slip PDFs
+- Stores generated artifacts securely
+- Delivers salary slips directly to employees
+- Processes payroll batches asynchronously
 
-```text
-CSV Upload
-    ↓
-FastAPI Upload Gateway
-    ↓
-Validation + Database Insert
-    ↓
-Redis Queue
-    ↓
-Background Workers
-    ↓
-PDF Generation
-    ↓
-Secure Storage
-    ↓
-Email Delivery
-```
+The goal is simple:
 
-### Architecture Principles
-
-* API requests should never generate PDFs
-* Background workers operate independently from API availability
-* Files do not persist on local storage
-* Processing status remains observable through database state
+> Convert payroll processing from a repetitive manual workflow into an automated background pipeline.
 
 ---
 
-# Initial Architecture Design
+# How AEPP Works
 
-![Initial Design](images/initial-sketch.png)
+AEPP follows a decoupled event-driven architecture.
 
-The original design focused on:
+Frontend responsibilities:
 
-1. Worker decoupling
-2. Queue based processing
-3. Stateless document generation
-4. Processing telemetry
-5. Cloud storage integration
+- Upload handling
+- CSV validation
+- User interactions
+- Review interfaces
 
----
+Backend responsibilities:
 
-# Frontend Specifications & Architecture
+- Persistent storage
+- Background processing
+- PDF generation
+- Storage handling
+- Email delivery
 
-The frontend is designed as a decoupled client application that communicates independently with backend services.
+Heavy operations intentionally happen outside the request lifecycle.
 
-![Frontend Integration](images/initial_page.png)
+This prevents:
 
-The dashboard provides administrators with payroll upload, validation, preview, and processing capabilities.
-
-## Tech Stack
-
-### Framework
-
-* Next.js (App Router)
-
-### Styling
-
-* Tailwind CSS v4
-
-### Components
-
-* shadcn/ui
-* Radix UI primitives
-
-### Client Side Processing
-
-* PapaParse
-
-### Icons
-
-* Lucide React
-* Custom SVGs
+- Browser timeouts
+- Blocking operations
+- Large batch failures
 
 ---
 
-## Core UI Components
+# High Level Explanation
 
-### CsvUploader (`components/csv-uploader.tsx`)
+The platform is built around two architectural principles.
 
-Handles three primary states:
+## Multi Tenant Isolation
 
-### Idle State
+Each organization operates within its own isolated workspace.
 
-Displays drag-and-drop upload interface.
+This prevents:
 
-### Preview State
-
-* Parses CSV locally
-* Displays horizontally scrollable preview table
-* Allows administrator verification before submission
-
-### Processing State
-
-* Handles loading states
-* Sends files to backend APIs
-* Displays system telemetry
+- Cross organization collisions
+- Shared employee records
+- Payroll leakage
 
 ---
 
-# Frontend Backend Integration
+## Background Processing
 
-The frontend and backend communicate through REST APIs while remaining completely decoupled.
+Payroll generation is computationally expensive.
 
-## Communication Flow
+Instead of forcing users to wait:
 
-### 1. Client Side Validation
-
-CSV files are parsed locally.
-
-No backend communication occurs during preview.
+- API stores data
+- Background workers process requests
+- Users continue immediately
 
 ---
 
-### 2. Data Dispatch
+# System Architecture
 
-The raw file is packaged into a FormData object.
+The system separates ingestion, processing, storage, and delivery into independent services.
 
----
-
-### 3. Transmission
-
-The frontend performs a POST request to FastAPI.
+![AEPP Architecture](images/aepp_architecture.svg)
 
 ---
 
-### 4. Asynchronous Processing
+## Processing Pipeline
+
+![Pipeline](images/new_diagram.png)
+
+---
+
+# Initial Design Evolution
+
+The project began with architecture exploration and processing sketches before implementation.
+
+## Initial Architecture Sketch
+
+![Initial Sketch](images/initial-sketch.png)
+
+---
+
+## Initial Interface Prototype
+
+![Initial UI](images/initial_page.png)
+
+These iterations were used to validate:
+
+- Upload flow
+- Worker separation
+- Processing order
+- Data movement paths
+
+---
+
+# Data Flow
+
+### Step 1 — Upload
+
+User uploads:
+
+- Employee roster
+- Salary sheet
+
+Frontend:
+
+- Removes BOM characters
+- Validates headers
+- Normalizes data
+
+↓
+
+### Step 2 — Backend Validation
 
 FastAPI:
 
-* Validates payload
-* Writes metadata to PostgreSQL
-* Pushes batch into Redis
-* Returns HTTP 202 immediately
+- Receives upload
+- Creates employee records
+- Creates batch records
+
+↓
+
+### Step 3 — Queue Creation
+
+FastAPI:
+
+- Stores pending slips
+- Pushes tasks into Redis
+
+↓
+
+### Step 4 — Worker Processing
+
+Celery:
+
+- Pulls tasks
+- Generates salary slips
+- Encrypts PDFs
+
+↓
+
+### Step 5 — Storage
+
+Generated PDFs:
+
+- Uploaded to S3
+- Stored privately
+
+↓
+
+### Step 6 — Delivery
+
+System:
+
+- Creates presigned URLs
+- Sends employee emails
 
 ---
 
-## API Specification
+# How To Use
 
-### Endpoint
+## Step 1 — Open Platform
+
+Access frontend.
+
+Create workspace.
+
+or
+
+Login into existing workspace.
+
+---
+
+## Step 2 — Upload Employee Roster
+
+Upload:
 
 ```text
-POST /api/v1/payroll/upload
+roster.csv
 ```
-
-### Content Type
-
-```text
-multipart/form-data
-```
-
-### Frontend Request Example
-
-```javascript
-const formData = new FormData();
-
-formData.append("file", rawFile);
-
-const response = await fetch(
-  "http://localhost:8000/api/v1/payroll/upload",
-  {
-      method: "POST",
-      body: formData,
-  }
-);
-```
-
----
-
-# Technology Stack
-
-## Backend
-
-* FastAPI
-* PostgreSQL
-* SQLAlchemy (Async)
-* Alembic
-* Celery
-
-## Infrastructure
-
-* Redis (Upstash)
-* AWS S3
-* Resend API
-
-## Document Generation
-
-* ReportLab
-* In-memory buffer streaming
-
-## Frontend
-
-* Next.js
-* Tailwind CSS
-* shadcn/ui
-
----
-
-# Database Design
-
-![Database Schema](images/supabase_tables.png)
-
-The system revolves around three primary entities.
-
----
-
-## employees
-
-Stores employee metadata.
-
-| Field       | Purpose             |
-| ----------- | ------------------- |
-| id          | Employee identifier |
-| name        | Employee name       |
-| email       | Employee email      |
-| designation | Employee role       |
-| dob         | Date of birth used for salary slip password protection |
-
----
-
-## payroll_batches
-
-Tracks upload lifecycle.
-
-| Field         | Purpose                       |
-| ------------- | ----------------------------- |
-| id            | Batch identifier              |
-| month_year    | Payroll month                 |
-| total_records | Number of employees processed |
-| status        | Batch processing state        |
-
----
-
-## salary_slips
-
-Stores generated payroll information and processing results.
 
 Contains:
 
-* Salary components
-* Employee relationships
-* Batch relationships
-* Processing status
-* Storage references
-* Error tracking
-
-The schema enables workers to process payroll batches independently while maintaining processing visibility.
+- Employee ID
+- Name
+- Email
+- Designation
+- DOB
 
 ---
 
-# Engineering Milestones & Implementation Proofs
+## Step 3 — Upload Salary Sheet
+
+Upload:
+
+```text
+salary.csv
+```
+
+Contains:
+
+- Base Salary
+- HRA
+- Allowances
+- Deductions
 
 ---
 
-## Phase 1 — Async API & Validation Layer
+## Step 4 — Review Upload
 
-Upload endpoints were implemented using asynchronous database sessions and validation rules.
+Review parsed data.
 
-### Implemented
+Confirm processing.
 
-* CSV validation
-* MIME validation
-* Batch creation logic
-* Async testing
+---
 
-### Test Execution
+## Step 5 — Employee Receives Email
 
-![Pytest Results](images/initial_test.png)
+Employee downloads encrypted PDF.
 
-Run:
+Password format:
+
+```text
+DOB + EmployeeID
+```
+
+Example:
+
+```text
+22012005EMP001
+```
+
+---
+
+# Clone & Run
+
+## Requirements
+
+- NodeJS v18+
+- Python 3.10+
+- Redis
+- PostgreSQL
+
+---
+
+## Clone
+
+```bash
+git clone https://github.com/your-username/aepp.git
+
+cd aepp
+```
+
+---
+
+## Frontend
+
+```bash
+cd frontend
+
+npm install
+
+npm run dev
+```
+
+Create:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+---
+
+## Backend
 
 ```bash
 cd backend
 
-pytest -v
+python -m venv venv
+
+source venv/bin/activate
+
+pip install -r requirements.txt
 ```
 
-Example:
+---
+
+## Run Services
+
+Database:
+
+```bash
+alembic upgrade head
+```
+
+API:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Worker:
+
+```bash
+celery -A app.celery_app worker --loglevel=info
+```
+
+---
+
+# Database Structure
+
+Database is normalized into independent entities.
+
+## Current Database Structure
+
+![Database Structure](images/latest_database.png)
+
+---
+
+## Tables
+
+### employees
+
+Stores:
+
+- Employee identity
+- Contact information
+
+---
+
+### payroll_batches
+
+Stores:
+
+- Upload batches
+- Batch status
+
+---
+
+### salary_slips
+
+Stores:
+
+- Salary records
+- Processing state
+- PDF references
+
+---
+
+# Configuration
+
+## PDF Configuration
+
+Uses:
+
+### ReportLab
+
+Reason:
+
+- Dynamic rendering
+- Flow based layouts
+
+Encryption:
+
+- StandardEncryption
+
+Permissions:
+
+- Copy disabled
+- Modification disabled
+
+---
+
+## Celery Configuration
+
+Purpose:
+
+Move expensive operations outside APIs.
+
+Configuration:
 
 ```text
-2 passed in 0.04s
+Concurrency = 1
 ```
+
+Prevents:
+
+- Memory spikes
+- Worker crashes
 
 ---
 
-## Phase 2 — Decoupled Upload Gateway
+## Redis Configuration
 
-The upload gateway validates payroll batches and immediately returns control to the client.
+Used for:
 
-### Upload Success Proof
+- Task queues
+- Worker communication
 
-![Upload Success](images/file_updload_success.png)
+---
 
-Example:
+## Database Configuration
 
-```json
-{
-    "message":"Batch accepted and saved to database",
-    "batch_id":"uuid",
-    "total_records":2
-}
-```
+PostgreSQL + Supabase
 
-Response:
+Provides:
+
+- Transactions
+- Constraints
+- Relational storage
+
+---
+
+# Services Used
+
+## NextJS
+
+Used For:
+
+- Frontend
+- Dashboard
+- Upload interface
+
+Why:
+
+- Rich UI ecosystem
+- Fast iteration
+
+---
+
+## FastAPI
+
+Used For:
+
+- APIs
+- Validation
+- Processing
+
+Why:
+
+- Async architecture
+- High throughput
+
+---
+
+## Celery + Redis
+
+Used For:
+
+- Background execution
+
+Why:
+
+- Prevent blocking requests
+
+---
+
+## PostgreSQL / Supabase
+
+Used For:
+
+- Relational storage
+
+Why:
+
+- Multi tenant architecture
+
+---
+
+## AWS S3
+
+Used For:
+
+- Salary slip storage
+
+Why:
+
+- Secure object storage
+
+---
+
+## Resend
+
+Used For:
+
+- Transactional email delivery
+
+Why:
+
+- Reliable delivery pipeline
+
+---
+
+# Project Contents
+
+Frontend:
+
+- Upload interfaces
+- Validation
+- Dashboard
+
+Backend:
+
+- APIs
+- Workers
+- Database
+- PDF generation
+
+---
+
+# Project Structure Visualization
+
+![Project Structure](images/project-structure-day2.png)
+
+---
+
+# Folder Structure
 
 ```text
-HTTP 202 Accepted
-```
-
-This confirms:
-
-* Validation succeeded
-* Database insertion succeeded
-* Batch creation succeeded
-* Processing moved into background systems
-
----
-
-## Phase 3 — Payload Engine & Email Delivery
-
-Workers fetch payroll records, generate salary slips, store artifacts, and dispatch emails.
-
-### Transactional Email Delivery
-
-![Email Received](images/email_recieved.png)
-
-Implemented:
-
-* Dynamic email templates
-* Verified sender domains
-* Queue based delivery
-* Rate limited dispatching
-
-This demonstrates:
-
-* Worker email integration
-* Dynamic payload rendering
-* Transactional delivery
-
----
-
-### Secure PDF Access
-
-![Secure PDF Access](images/pdf_access.png)
-
-Implemented:
-
-* In-memory PDF generation
-* Per-employee PDF password protection
-* AWS S3 uploads
-* Temporary signed URLs
-* Private artifact storage
-
-This demonstrates:
-
-* Documents are not attached directly
-* Artifacts remain private
-* Access expires automatically
-* Salary slips can be unlocked with roster-derived credentials
-
----
-
-# Project Structure
-
-```text
-EMPLOYEE_MAILER/
+AEPP/
 
 ├── backend/
 │   ├── alembic/
 │   ├── app/
 │   ├── tests/
 │   ├── .env
-│   ├── alembic.ini
-│   ├── conftest.py
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── alembic.ini
 │
 ├── documents/
-│
 ├── images/
-│
 ├── test_csv/
-│
-├── .gitignore
-│
-└── README.md
+├── README.md
+└── .gitignore
 ```
 
 ---
 
-# Getting Started
+# User Flow & Workspace Operations
 
-## Prerequisites
+## 🏢 1. Workspace Authentication
 
-* Python 3.10+
-* PostgreSQL
-* Redis
-* AWS Account
-* Resend API Key
+### Create Workspace
 
----
+User:
 
-## Clone Repository
-
-```bash
-git clone <repository-url>
-
-cd EMPLOYEE_MAILER/backend
-```
-
----
-
-## Create Virtual Environment
-
-Windows:
-
-```bash
-python -m venv venv
-
-venv\Scripts\activate
-```
-
-Linux / Mac:
-
-```bash
-python -m venv venv
-
-source venv/bin/activate
-```
-
----
-
-## Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Configure Environment Variables
-
-Create:
+- Fills company details
+- Uploads logo
+- Clicks:
 
 ```text
-backend/.env
+Create Workspace & Continue
 ```
+
+Backend:
+
+- Creates UUID
+- Uploads logo
+- Stores workspace
+
+Possible Errors:
+
+```text
+Workspace already exists
+```
+
+---
+
+### Existing Workspace Login
+
+User:
+
+```text
+Already have workspace?
+```
+
+Backend:
+
+- Looks up organization
+- Returns workspace
+
+Possible Errors:
+
+```text
+Workspace not found
+```
+
+---
+
+## 📋 2. Employee Roster Upload
+
+User actions:
+
+- Upload CSV
+- Download sample
+- Add rows manually
+- Remove rows
+- Skip roster upload
+
+Progression:
+
+```text
+Save roster & continue
+```
+
+Possible Errors:
+
+```text
+Missing headers
+
+Employee conflicts
+```
+
+---
+
+## 💰 3. Salary Upload
+
+Actions:
+
+- Upload salary CSV
+- Edit records
+- Return to roster
+
+Progression:
+
+```text
+Preview payment CSV
+```
+
+Possible Errors:
+
+```text
+Employee ID not found
+```
+
+---
+
+## 🔍 4. Preview & Dispatch
+
+User:
+
+- Reviews merged table
+- Confirms processing
+
+System:
+
+- Creates batch
+- Sends tasks to queue
+- Shows success state
+
+---
+
+## 🔒 5. Employee Flow
+
+Employee:
+
+Receives:
+
+- Email
+- Secure link
+- Encrypted PDF
+
+Password Rules:
+
+- Remove special characters from DOB
+- Uppercase Employee ID
+- Combine both
+
+Examples:
+
+```text
+22-01-2005 + EMP001
+
+↓
+
+22012005EMP001
+```
+
+```text
+1990/04/12 + emp-002
+
+↓
+
+19900412EMP002
+```
+
+---
+
+# Testing & Validation Phase
+
+Testing was performed incrementally to validate subsystems before full integration.
+
+---
+
+# Software Used During Testing
+
+Backend:
+
+- Pytest
+- Uvicorn
+- FastAPI Swagger
+
+Frontend:
+
+- NextJS Dev Server
+
+Database:
+
+- Supabase Dashboard
+
+Pipeline:
+
+- Real Email Delivery
+- PDF Verification
+
+---
+
+# Frontend Validation
+
+![Frontend Validation](images/initial_page.png)
+
+Validated:
+
+- CSV parsing
+- Table rendering
+- Preview generation
+
+---
+
+# API Validation
+
+![Upload Validation](images/file_updload_success.png)
+
+Validated:
+
+- Multipart uploads
+- Batch creation
+- HTTP responses
+
+---
+
+# Automated Backend Testing
+
+![Pytest Results](images/initial_test.png)
+
+Tests:
+
+- Valid uploads
+- Invalid file rejection
 
 Example:
-
-```env
-DATABASE_URL=
-
-REDIS_URL=
-
-AWS_ACCESS_KEY_ID=
-
-AWS_SECRET_ACCESS_KEY=
-
-AWS_REGION=
-
-S3_BUCKET_NAME=
-
-EMAIL_API_KEY=
-
-VERIFIED_DOMAIN=
-```
-
----
-
-## Run Database Migrations
-
-```bash
-alembic upgrade head
-```
-
----
-
-## Start FastAPI
-
-```bash
-uvicorn app.main:app --reload
-```
-
----
-
-## Start Worker
-
-```bash
-celery -A app.celery_app worker --loglevel=info --pool=solo
-```
-
----
-
-## Run Tests
 
 ```bash
 pytest -v
 ```
 
----
+Result:
 
-# Future Improvements
-
-* Dead Letter Queue support
-* Worker autoscaling
-* Real time telemetry dashboard
-* Progress tracking
-* Multi tenant payroll support
+```text
+2 tests passed
+```
 
 ---
 
-Developed by **Gowrishankar S Menon**
+# Database Verification
+
+![Database Validation](images/latest_database.png)
+
+Validated:
+
+- Employee insertion
+- Batch generation
+- Salary creation
+
+---
+
+# PDF Validation
+
+![Generated PDF](images/pdf_access.png)
+
+Validated:
+
+- Salary calculations
+- Layout correctness
+- Encryption
+
+---
+
+# Email Delivery Validation
+
+![Email Validation](images/email_recieved.png)
+
+Validated:
+
+- Delivery pipeline
+- URL generation
+- Email formatting
+
+---
+
+# End To End Validation
+
+```text
+CSV Upload
+
+↓
+
+Database Write
+
+↓
+
+Queue Creation
+
+↓
+
+Worker Processing
+
+↓
+
+PDF Generation
+
+↓
+
+S3 Upload
+
+↓
+
+Email Delivery
+```
+
+Verified:
+
+- Pipeline reliability
+- Worker execution
+- Data integrity
+- Artifact generation
+- Asynchronous execution
