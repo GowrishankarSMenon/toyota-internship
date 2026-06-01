@@ -1,21 +1,11 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
-
-class EmployeeSalaryRow(BaseModel):
-    employee_id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=2)
-    email: EmailStr
-    designation: str = Field(..., min_length=2)
-    base_salary: float = Field(..., ge=0)
-    hra: float = Field(..., ge=0)
-    allowances: float = Field(..., ge=0)
-    deductions: float = Field(..., ge=0)
 
 class UploadResponse(BaseModel):
     message: str
-    batch_id: str
-    total_records: int
+    batch_id: Optional[str] = None
+    total_records: Optional[int] = None
 
 class OrganizationResponse(BaseModel):
     id: UUID
@@ -25,3 +15,19 @@ class OrganizationResponse(BaseModel):
     logo_s3_key: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class PayrollPreviewRow(BaseModel):
+    employee_id: str
+    name: str
+    email: str
+    designation: str
+    month_year: str
+    base_salary: float
+    hra: float
+    allowances: float
+    deductions: float
+    net_salary: float
+
+class PayrollConfirmRequest(BaseModel):
+    organization_id: UUID
+    payroll_data: List[PayrollPreviewRow]

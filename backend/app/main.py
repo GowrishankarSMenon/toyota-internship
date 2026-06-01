@@ -3,18 +3,19 @@ import os
 import uuid
 from io import StringIO
 from datetime import datetime
+from typing import List
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, status, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from pydantic import ValidationError
 
-from app.schemas import UploadResponse, EmployeeSalaryRow, OrganizationResponse
+from app.schemas import UploadResponse, OrganizationResponse, PayrollConfirmRequest
 from app.database import get_db
 from app.models import Employee, PayrollBatch, SalarySlip, BatchStatus, Organization
 from app.payload_engine import get_s3_client
-
-# Just import the task once from where it is defined
 from app.tasks import process_payroll_batch
 
 app = FastAPI(title="AEPP API")
@@ -27,11 +28,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# FIXED: Matched the route exactly to what the React frontend is calling
-@app.post("/api/v1/payroll/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
-async def upload_payroll_csv(
-    organization_id: uuid.UUID = Form(...),  # <-- NEW: Capturing the Org ID
-    file: UploadFile = File(...), 
+# ---------------------------------------------------------
+# 1. UPLOAD EMPLOYEE ROSTER (CSV 1)
+# ---------------------------------------------------------
+@app.post("/api/v1/employees/upload", status_code=status.HTTP_202_ACCEPTED)
+async def upload_employees(
+    organization_id: uuid.UUID = Form(...),
+    file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db)
 ):
     if not file.filename.endswith('.csv'):
@@ -41,31 +44,22 @@ async def upload_payroll_csv(
     decoded_content = content.decode('utf-8')
     csv_reader = csv.DictReader(StringIO(decoded_content))
     
-    valid_records = []
-    
-    for row_num, row in enumerate(csv_reader, start=1):
-        try:
-            clean_row = {k.strip(): v.strip() for k, v in row.items()}
-            valid_record = EmployeeSalaryRow(**clean_row)
-            valid_records.append(valid_record)
-        except ValidationError as e:
-            raise HTTPException(
-                status_code=422, 
-                detail=f"Validation error on row {row_num}: {e.errors()[0]['msg']}"
-            )
-    
-    if not valid_records:
+    employee_data = []
+    for row in csv_reader:
+        clean_row = {k.strip(): v.strip() for k, v in row.items()}
+        # Safely handle variations in CSV header names
+        employee_data.append({
+            "id": clean_row.get("Employee ID", clean_row.get("employee_id")),
+            "organization_id": organization_id,
+            "name": clean_row.get("Name", clean_row.get("name")),
+            "email": clean_row.get("Email", clean_row.get("email")),
+            "designation": clean_row.get("Designation", clean_row.get("designation"))
+        })
+        
+    if not employee_data:
         raise HTTPException(status_code=400, detail="The CSV file is empty or contains no valid data")
 
-    # <-- NEW: Injecting the organization_id into the employee records
-    employee_data = [{
-        "id": row.employee_id,
-        "organization_id": organization_id, 
-        "name": row.name,
-        "email": row.email,
-        "designation": row.designation
-    } for row in valid_records]
-
+    # Insert or Update employees
     stmt = pg_insert(Employee).values(employee_data)
     stmt = stmt.on_conflict_do_update(
         index_elements=['id'],
@@ -76,17 +70,85 @@ async def upload_payroll_csv(
         }
     )
     await db.execute(stmt)
+    await db.commit()
 
-    # <-- NEW: Linking the batch to the organization
+    return {"message": f"Successfully uploaded {len(employee_data)} employees."}
+
+
+# ---------------------------------------------------------
+# 2. UPLOAD SALARY & PREVIEW (CSV 2)
+# ---------------------------------------------------------
+@app.post("/api/v1/payroll/preview")
+async def preview_payroll(
+    organization_id: uuid.UUID = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are allowed")
+
+    content = await file.read()
+    decoded_content = content.decode('utf-8')
+    csv_reader = csv.DictReader(StringIO(decoded_content))
+    
+    preview_data = []
+    
+    for row_num, row in enumerate(csv_reader, start=1):
+        clean_row = {k.strip(): v.strip() for k, v in row.items()}
+        emp_id = clean_row.get("Employee ID", clean_row.get("employee_id"))
+        
+        # Fetch employee details using the Employee ID as the primary key
+        result = await db.execute(select(Employee).where(Employee.id == emp_id, Employee.organization_id == organization_id))
+        employee = result.scalar_one_or_none()
+        
+        if not employee:
+            raise HTTPException(status_code=404, detail=f"Employee ID {emp_id} in row {row_num} not found in database. Please upload them first.")
+
+        base = float(clean_row.get("Base Salary", 0))
+        hra = float(clean_row.get("HRA", 0))
+        allowances = float(clean_row.get("Allowances", 0))
+        deductions = float(clean_row.get("Deductions", 0))
+        net = base + hra + allowances - deductions
+
+        preview_data.append({
+            "employee_id": employee.id,
+            "name": employee.name,
+            "email": employee.email,
+            "designation": employee.designation,
+            "month_year": clean_row.get("Month/Year", datetime.now().strftime("%B %Y")),
+            "base_salary": base,
+            "hra": hra,
+            "allowances": allowances,
+            "deductions": deductions,
+            "net_salary": net
+        })
+
+    # Return the data so the frontend can build a preview table
+    return {"preview": preview_data}
+
+
+# ---------------------------------------------------------
+# 3. CONFIRM & TRIGGER AUTOMATION
+# ---------------------------------------------------------
+@app.post("/api/v1/payroll/process")
+async def process_payroll(
+    request: PayrollConfirmRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    if not request.payroll_data:
+        raise HTTPException(status_code=400, detail="No payroll data provided")
+
+    # Create the batch
     new_batch = PayrollBatch(
-        organization_id=organization_id,
-        month_year=datetime.now().strftime("%B %Y"),
-        total_records=len(valid_records),
+        organization_id=request.organization_id,
+        month_year=request.payroll_data[0].month_year,
+        total_records=len(request.payroll_data),
         status=BatchStatus.PENDING
     )
     db.add(new_batch)
     await db.flush() 
 
+    # Create the slips using dot notation from the Pydantic models
     slip_objects = [
         SalarySlip(
             batch_id=new_batch.id,
@@ -95,22 +157,21 @@ async def upload_payroll_csv(
             hra=row.hra,
             allowances=row.allowances,
             deductions=row.deductions,
-            net_salary=(row.base_salary + row.hra + row.allowances - row.deductions)
-        ) for row in valid_records
+            net_salary=row.net_salary
+        ) for row in request.payroll_data
     ]
     db.add_all(slip_objects)
-    
     await db.commit()
 
-    # Heavy lifting pushed to the Redis background queue
+    # Trigger Celery Worker
     process_payroll_batch.delay(str(new_batch.id))
 
-    return UploadResponse(
-        message="Batch accepted and saved to database",
-        batch_id=str(new_batch.id),
-        total_records=len(valid_records)
-    )
+    return {"message": "Automation Triggered", "batch_id": str(new_batch.id)}
 
+
+# ---------------------------------------------------------
+# 4. CREATE ORGANIZATION
+# ---------------------------------------------------------
 @app.post("/api/organizations", response_model=OrganizationResponse)
 async def create_organization(
     name: str = Form(...),
