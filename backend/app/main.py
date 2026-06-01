@@ -63,50 +63,43 @@ async def upload_employees(
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
     content = await file.read()
-    # THE FIX: 'utf-8-sig' automatically destroys hidden Windows/Excel BOM characters
     decoded_content = content.decode('utf-8-sig') 
     csv_reader = csv.DictReader(StringIO(decoded_content))
     
     employee_data = []
     for row in csv_reader:
-        # THE FIX: Convert all headers to lowercase to prevent Case-Sensitivity crashes
         clean_row = clean_csv_row(row)
-        
-        # Look for the ID using any standard variation
         emp_id = normalize_employee_id(
             clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
         )
         
         if not emp_id:
-            continue # Skip completely empty rows
+            continue
 
         employee_data.append({
-            "id": emp_id,
+            "employee_id": emp_id, # <-- Changed to employee_id
             "organization_id": organization_id,
             "name": clean_row.get("name", "Unknown"),
             "email": clean_row.get("email", "no-email@company.com"),
             "designation": clean_row.get("designation", "Employee"),
             "dob": normalize_text_value(
-                clean_row.get(
-                    "dob",
-                    clean_row.get("date_of_birth", clean_row.get("birth_date"))
-                )
+                clean_row.get("dob", clean_row.get("date_of_birth", clean_row.get("birth_date")))
             )
         })
         
     if not employee_data:
         raise HTTPException(status_code=400, detail="The CSV file is empty or missing 'Employee ID' headers.")
 
-    # Insert or Update employees
     stmt = pg_insert(Employee).values(employee_data)
+    
+    # THE FIX: Tell Postgres to use the multi-tenant constraint to detect conflicts
     stmt = stmt.on_conflict_do_update(
-        index_elements=['id'],
+        constraint='uix_org_emp_id', 
         set_={
-            'organization_id': stmt.excluded.organization_id,
             'name': stmt.excluded.name,
             'email': stmt.excluded.email,
             'designation': stmt.excluded.designation,
-            'dob': stmt.excluded.dob # <-- Added DOB to the update statement
+            'dob': stmt.excluded.dob 
         }
     )
     await db.execute(stmt)
@@ -128,47 +121,33 @@ async def preview_payroll(
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
     content = await file.read()
-    # THE FIX: Remove hidden BOM characters here too
     decoded_content = content.decode('utf-8-sig')
     csv_reader = csv.DictReader(StringIO(decoded_content))
     
     preview_data = []
-    
     for row_num, row in enumerate(csv_reader, start=1):
-        # THE FIX: Lowercase headers
         clean_row = clean_csv_row(row)
-        
         emp_id = normalize_employee_id(
             clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
         )
         if not emp_id:
-            continue # Skip empty rows
+            continue
         
-        # Fetch employee details using the Employee ID
+        # THE FIX: Look up using Employee.employee_id
         result = await db.execute(
             select(Employee).where(
-                func.upper(func.trim(Employee.id)) == emp_id,
+                func.upper(func.trim(Employee.employee_id)) == emp_id,
                 Employee.organization_id == organization_id,
             )
         )
         employee = result.scalar_one_or_none()
         
         if not employee:
-            roster_ids_result = await db.execute(
-                select(Employee.id).where(Employee.organization_id == organization_id).order_by(Employee.id)
-            )
-            roster_ids = roster_ids_result.scalars().all()
-            sample_ids = ", ".join(roster_ids[:10]) if roster_ids else "none"
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    f"Employee ID {emp_id} in row {row_num} was not found for this organization. "
-                    f"Upload the roster first and make sure the payroll sheet uses the same employee IDs. "
-                    f"Current roster IDs: {sample_ids}"
-                ),
+                detail=f"Employee ID {emp_id} in row {row_num} was not found for this organization."
             )
 
-        # Safely extract financials
         base = float(clean_row.get("base salary", clean_row.get("base_salary", 0)))
         hra = float(clean_row.get("hra", 0))
         allowances = float(clean_row.get("allowances", 0))
@@ -176,7 +155,7 @@ async def preview_payroll(
         net = base + hra + allowances - deductions
 
         preview_data.append({
-            "employee_id": employee.id,
+            "employee_id": str(employee.id), # Pass the internal UUID to the frontend
             "name": employee.name,
             "email": employee.email,
             "designation": employee.designation,
