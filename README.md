@@ -229,6 +229,7 @@ Stores employee metadata.
 | name        | Employee name       |
 | email       | Employee email      |
 | designation | Employee role       |
+| dob         | Date of birth used for salary slip password protection |
 
 ---
 
@@ -360,6 +361,7 @@ This demonstrates:
 Implemented:
 
 * In-memory PDF generation
+* Per-employee PDF password protection
 * AWS S3 uploads
 * Temporary signed URLs
 * Private artifact storage
@@ -369,6 +371,7 @@ This demonstrates:
 * Documents are not attached directly
 * Artifacts remain private
 * Access expires automatically
+* Salary slips can be unlocked with roster-derived credentials
 
 ---
 

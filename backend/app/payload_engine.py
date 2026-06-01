@@ -1,11 +1,13 @@
 import os
 from datetime import datetime
 from io import BytesIO
+import re
 
 import boto3
 from botocore.config import Config
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.pdfencrypt import StandardEncryption
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
@@ -38,10 +40,29 @@ def fetch_logo_from_s3(s3_key):
         return None
 
 
+def build_pdf_password(employee):
+    dob = getattr(employee, "dob", None)
+    dob_value = re.sub(r"[^0-9A-Za-z]", "", dob or "")
+    employee_id = re.sub(r"[^0-9A-Za-z]", "", str(employee.id or "").strip().upper())
+
+    if dob_value:
+        return f"{dob_value}{employee_id}"
+
+    return employee_id or "AEPP"
+
+
 def generate_salary_slip_pdf(employee, slip, month_year, organization):
     """Generates a professional PDF salary slip in memory, dynamically styled per organization."""
     buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
+    encryption = StandardEncryption(
+        userPassword=build_pdf_password(employee),
+        ownerPassword=os.urandom(16).hex(),
+        canPrint=1,
+        canModify=0,
+        canCopy=0,
+        canAnnotate=0,
+    )
+    pdf = canvas.Canvas(buffer, pagesize=letter, encrypt=encryption)
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(

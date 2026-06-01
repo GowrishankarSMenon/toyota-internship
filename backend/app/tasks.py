@@ -32,7 +32,8 @@ def send_salary_email(self, employee_name: str, employee_email: str, month_year:
             <h2 style="color: #2563eb;">Salary Slip: {month_year}</h2>
             <p>Dear {employee_name},</p>
             <p>Your salary slip for <strong>{month_year}</strong> has been generated and securely stored.</p>
-            <p>You can access your highly confidential document using the secure link below. This cryptographic link will automatically expire in 7 days.</p>
+            <p>You can access your highly confidential document using the secure link below. This link will automatically expire in 7 days.</p>
+            <p><strong>PDF password:</strong> use your DOB from the roster combined with your employee ID, without spaces or separators.</p>
             <br>
             <a href="{secure_url}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
                 View Secure Salary Slip

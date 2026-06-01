@@ -35,6 +35,21 @@ def normalize_employee_id(value: str | None) -> str | None:
     normalized = value.strip()
     return normalized.upper() if normalized else None
 
+
+def normalize_text_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized if normalized else None
+
+
+def clean_csv_row(row: dict) -> dict:
+    return {
+        k.strip().lower(): v.strip() if isinstance(v, str) else ""
+        for k, v in row.items()
+        if k
+    }
+
 # ---------------------------------------------------------
 # 1. UPLOAD EMPLOYEE ROSTER (CSV 1)
 # ---------------------------------------------------------
@@ -55,7 +70,7 @@ async def upload_employees(
     employee_data = []
     for row in csv_reader:
         # THE FIX: Convert all headers to lowercase to prevent Case-Sensitivity crashes
-        clean_row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
+        clean_row = clean_csv_row(row)
         
         # Look for the ID using any standard variation
         emp_id = normalize_employee_id(
@@ -70,7 +85,13 @@ async def upload_employees(
             "organization_id": organization_id,
             "name": clean_row.get("name", "Unknown"),
             "email": clean_row.get("email", "no-email@company.com"),
-            "designation": clean_row.get("designation", "Employee")
+            "designation": clean_row.get("designation", "Employee"),
+            "dob": normalize_text_value(
+                clean_row.get(
+                    "dob",
+                    clean_row.get("date_of_birth", clean_row.get("birth_date"))
+                )
+            )
         })
         
     if not employee_data:
@@ -114,7 +135,7 @@ async def preview_payroll(
     
     for row_num, row in enumerate(csv_reader, start=1):
         # THE FIX: Lowercase headers
-        clean_row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
+        clean_row = clean_csv_row(row)
         
         emp_id = normalize_employee_id(
             clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))

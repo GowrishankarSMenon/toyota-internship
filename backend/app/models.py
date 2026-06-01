@@ -40,6 +40,7 @@ class Employee(Base):
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
     designation = Column(String(255), nullable=False)
+    dob = Column(String(20), nullable=True)
 
     # Relationships
     organization = relationship("Organization", back_populates="employees")

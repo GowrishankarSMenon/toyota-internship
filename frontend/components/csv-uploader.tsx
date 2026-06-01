@@ -21,7 +21,7 @@ const LOADING_PHRASES = [
   "Dispatching payroll batch...",
 ];
 
-const ROSTER_HEADERS = ["employee_id", "name", "email", "designation"];
+const ROSTER_HEADERS = ["employee_id", "name", "email", "designation", "dob"];
 const SALARY_HEADERS = ["employee_id", "month_year", "base_salary", "hra", "allowances", "deductions"];
 
 type UploadStep = "roster-edit" | "salary-edit" | "preview" | "processing" | "success";
@@ -36,6 +36,7 @@ const emptyRosterRow = (): CsvRow => ({
   name: "",
   email: "",
   designation: "",
+  dob: "",
 });
 
 const emptySalaryRow = (): CsvRow => ({
@@ -53,12 +54,14 @@ const rosterSampleCsv = Papa.unparse([
     name: "John Doe",
     email: "john.doe@company.com",
     designation: "Engineer",
+    dob: "1990-04-12",
   },
   {
     employee_id: "EMP002",
     name: "Jane Smith",
     email: "jane.smith@company.com",
     designation: "Manager",
+    dob: "1988-09-03",
   },
 ]);
 
@@ -378,7 +381,7 @@ export function CsvUploader() {
             {isRosterStep ? "Edit the employee roster before continuing" : "Edit the salary sheet before previewing"}
           </h3>
           <p className="text-sm text-zinc-400 mt-1">
-            {isRosterStep ? "Add, remove, or correct employee rows, then save to the workspace." : "Make changes to the payment rows, then generate the preview."}
+            {isRosterStep ? "Add, remove, or correct employee rows, including DOB for PDF locking, then save to the workspace." : "Make changes to the payment rows, then generate the preview."}
           </p>
         </div>
 
@@ -626,7 +629,7 @@ export function CsvUploader() {
           {isRosterStep ? "Drop or upload the employee roster CSV" : "Drop or upload the salary CSV"}
         </h3>
         <p className="text-sm text-zinc-500 mt-2">
-          {isDragging ? "Drop the file here to parse" : (isRosterStep ? "Roster: employee_id, name, email, designation" : "Salary: employee_id, month_year, base_salary, hra, allowances, deductions")}
+          {isDragging ? "Drop the file here to parse" : (isRosterStep ? "Roster: employee_id, name, email, designation, dob" : "Salary: employee_id, month_year, base_salary, hra, allowances, deductions")}
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <Button
