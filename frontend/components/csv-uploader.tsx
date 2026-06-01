@@ -363,7 +363,7 @@ export function CsvUploader() {
         setSalaryRows([emptySalaryRow()]);
         setPreviewData([]);
         setActiveFileName(null);
-      }, 3000);
+      }, 5000); // Extended slightly to let them read the spam warning
     } catch (err) {
       console.error("Transmission failed:", err);
       setError(err instanceof Error ? err.message : "Failed to process payroll.");
@@ -489,6 +489,7 @@ export function CsvUploader() {
         </div>
         <h3 className="text-xl font-semibold text-white tracking-tight">Pipeline Dispatched</h3>
         <p className="text-sm text-zinc-400 mt-2">Workers are generating highly secure salary slips.</p>
+        <p className="text-xs text-zinc-500 mt-1">Please check your spam folder if the emails are not received shortly.</p>
       </div>
     );
   }
@@ -594,67 +595,82 @@ export function CsvUploader() {
 
   return (
     <div className="space-y-5 w-full">
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`border border-dashed rounded-[24px] p-8 md:p-12 flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer group relative ${
-          isDragging
-            ? "border-white/40 bg-white/5 scale-[1.01]"
-            : "border-white/10 bg-[#09090b] hover:border-white/20 hover:bg-white/[0.02]"
-        }`}
-      >
-        <input type="file" accept=".csv" onChange={handleFileInput} ref={fileInputRef} className="hidden" />
-
+      <div className="flex flex-col items-center w-full gap-4 animate-in fade-in duration-300">
         <div
-          className={`w-12 h-12 rounded-full flex items-center justify-center mb-5 transition-transform duration-300 ${
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`w-full border border-dashed rounded-[24px] p-8 md:p-12 flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer group relative ${
             isDragging
-              ? "bg-white text-black scale-110"
-              : "bg-white/5 border border-white/10 text-zinc-400 group-hover:bg-white group-hover:text-black group-hover:scale-105"
+              ? "border-white/40 bg-white/5 scale-[1.01]"
+              : "border-white/10 bg-[#09090b] hover:border-white/20 hover:bg-white/[0.02]"
           }`}
         >
-          {isRosterStep ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          )}
+          <input type="file" accept=".csv" onChange={handleFileInput} ref={fileInputRef} className="hidden" />
+
+          <div
+            className={`w-12 h-12 rounded-full flex items-center justify-center mb-5 transition-transform duration-300 ${
+              isDragging
+                ? "bg-white text-black scale-110"
+                : "bg-white/5 border border-white/10 text-zinc-400 group-hover:bg-white group-hover:text-black group-hover:scale-105"
+            }`}
+          >
+            {isRosterStep ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+          </div>
+
+          <h3 className="font-medium text-base text-zinc-200">
+            {isRosterStep ? "Drop or upload the employee roster CSV" : "Drop or upload the salary CSV"}
+          </h3>
+          <p className="text-sm text-zinc-500 mt-2">
+            {isDragging ? "Drop the file here to parse" : (isRosterStep ? "Roster: employee_id, name, email, designation, dob" : "Salary: employee_id, month_year, base_salary, hra, allowances, deductions")}
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={(event) => {
+                event.stopPropagation();
+                downloadCsv(isRosterStep ? "sample-roster.csv" : "sample-salary.csv", isRosterStep ? rosterSampleCsv : salarySampleCsv);
+              }}
+              className="rounded-full text-zinc-200 hover:text-white hover:bg-white/5 border border-white/10"
+            >
+              Download sample CSV
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={(event) => {
+                event.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              className="rounded-full text-zinc-200 hover:text-white hover:bg-white/5 border border-white/10"
+            >
+              Upload CSV
+            </Button>
+          </div>
         </div>
 
-        <h3 className="font-medium text-base text-zinc-200">
-          {isRosterStep ? "Drop or upload the employee roster CSV" : "Drop or upload the salary CSV"}
-        </h3>
-        <p className="text-sm text-zinc-500 mt-2">
-          {isDragging ? "Drop the file here to parse" : (isRosterStep ? "Roster: employee_id, name, email, designation, dob" : "Salary: employee_id, month_year, base_salary, hra, allowances, deductions")}
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={(event) => {
-              event.stopPropagation();
-              downloadCsv(isRosterStep ? "sample-roster.csv" : "sample-salary.csv", isRosterStep ? rosterSampleCsv : salarySampleCsv);
-            }}
-            className="rounded-full text-zinc-200 hover:text-white hover:bg-white/5 border border-white/10"
+        {isRosterStep && (
+          <Button 
+            variant="ghost" 
+            onClick={(e) => {
+              e.stopPropagation();
+              setCurrentStep("salary-edit");
+            }} 
+            className="text-zinc-500 hover:text-white rounded-full text-xs tracking-wide uppercase"
           >
-            Download sample CSV
+            Skip to Monthly Salary Upload &rarr;
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={(event) => {
-              event.stopPropagation();
-              fileInputRef.current?.click();
-            }}
-            className="rounded-full text-zinc-200 hover:text-white hover:bg-white/5 border border-white/10"
-          >
-            Upload CSV
-          </Button>
-        </div>
+        )}
       </div>
 
       {error && (
