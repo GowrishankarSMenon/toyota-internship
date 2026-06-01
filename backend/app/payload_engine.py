@@ -43,7 +43,7 @@ def fetch_logo_from_s3(s3_key):
 def build_pdf_password(employee):
     dob = getattr(employee, "dob", None)
     dob_value = re.sub(r"[^0-9A-Za-z]", "", dob or "")
-    employee_id = re.sub(r"[^0-9A-Za-z]", "", str(employee.id or "").strip().upper())
+    employee_id = re.sub(r"[^0-9A-Za-z]", "", str(employee.employee_id or "").strip().upper())
 
     if dob_value:
         return f"{dob_value}{employee_id}"
@@ -161,7 +161,7 @@ def generate_salary_slip_pdf(employee, slip, month_year, organization):
     pdf.drawString(margin + 30, section_y + 16, "Employee details and payroll period for this slip")
 
     employee_rows = [
-        [Paragraph("Employee Name", label_style), Paragraph(employee.name, value_style), Paragraph("Employee ID", label_style), Paragraph(employee.id, value_style)],
+        [Paragraph("Employee Name", label_style), Paragraph(employee.name, value_style), Paragraph("Employee ID", label_style), Paragraph(employee.employee_id, value_style)],
         [Paragraph("Designation", label_style), Paragraph(employee.designation, value_style), Paragraph("Email", label_style), Paragraph(employee.email, value_style)],
         [Paragraph("Pay Period", label_style), Paragraph(month_year, value_style), Paragraph("Organization", label_style), Paragraph(organization.name, value_style)],
     ]
