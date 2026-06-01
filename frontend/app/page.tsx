@@ -22,24 +22,24 @@ const TRANSITION_PHRASES = [
 const HOW_IT_WORKS_STEPS = [
   {
     kicker: "Step 01",
-    title: "Drop in the inputs",
+    title: "Create the workspace",
     description:
-      "Upload your payroll sheet, branding assets, and custom message. The workspace captures everything needed for a full run.",
+      "Enter the organization details first so the system can create the workspace and lock the upload flow to that tenant.",
     metric: "01. Intake",
   },
   {
     kicker: "Step 02",
-    title: "Generate every payroll packet",
+    title: "Edit roster and salary data",
     description:
-      "The backend processes each row, assembles individualized PDFs, and keeps tenant data isolated while jobs run in the background.",
-    metric: "02. Render",
+      "Review the roster and payment rows in the editor, add or remove entries, and download a clean sample CSV when needed.",
+    metric: "02. Edit",
   },
   {
     kicker: "Step 03",
-    title: "Review the result in motion",
+    title: "Preview and dispatch payroll",
     description:
-      "Watch the output like a guided timeline, then move into the dashboard with a clean summary of what was created and what shipped.",
-    metric: "03. Launch",
+      "Generate the preview, verify the salary slip contents, and then dispatch the batch to the background workers.",
+    metric: "03. Send",
   },
 ];
 
@@ -852,7 +852,7 @@ export default function LandingPage() {
             <div className="mb-16 max-w-2xl">
               <p className="text-xs uppercase tracking-[0.35em] text-zinc-500 mb-3">How It Works</p>
               <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-white mb-4">
-                A scrollytelling walkthrough of the payroll flow.
+                Walkthrough of the steps.
               </h2>
               <p className="text-zinc-400 text-base md:text-lg leading-relaxed max-w-xl">
                 Scroll through the process — the left panel tracks where you are while the narrative shifts with each stage.
