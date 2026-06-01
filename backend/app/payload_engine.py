@@ -1,7 +1,7 @@
 import os
+import re
 from datetime import datetime
 from io import BytesIO
-import re
 
 import boto3
 from botocore.config import Config
@@ -9,10 +9,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.pdfencrypt import StandardEncryption
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.utils import ImageReader
-from reportlab.pdfgen import canvas
-from reportlab.platypus import Paragraph, Table, TableStyle
-
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, Image
 
 def get_s3_client():
     """Initializes and returns a boto3 S3 client."""
@@ -24,21 +21,19 @@ def get_s3_client():
         config=Config(signature_version="s3v4"),
     )
 
-
 def fetch_logo_from_s3(s3_key):
-    """Fetches a logo image from S3 directly into memory for ReportLab."""
+    """Fetches a logo image from S3 directly into memory."""
     if not s3_key:
         return None
     try:
         s3_client = get_s3_client()
         bucket_name = os.getenv("S3_BUCKET_NAME")
         response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
-        image_bytes = response["Body"].read()
-        return ImageReader(BytesIO(image_bytes))
+        # Return raw BytesIO for the Platypus Image component
+        return BytesIO(response["Body"].read())
     except Exception as exc:
         print(f"Failed to fetch logo from S3: {exc}")
         return None
-
 
 def build_pdf_password(employee):
     dob = getattr(employee, "dob", None)
@@ -50,10 +45,11 @@ def build_pdf_password(employee):
 
     return employee_id or "AEPP"
 
-
 def generate_salary_slip_pdf(employee, slip, month_year, organization):
-    """Generates a professional PDF salary slip in memory, dynamically styled per organization."""
+    """Generates a professional, auto-flowing PDF salary slip in memory."""
     buffer = BytesIO()
+    
+    # 1. Setup Encryption
     encryption = StandardEncryption(
         userPassword=build_pdf_password(employee),
         ownerPassword=os.urandom(16).hex(),
@@ -62,189 +58,157 @@ def generate_salary_slip_pdf(employee, slip, month_year, organization):
         canCopy=0,
         canAnnotate=0,
     )
-    pdf = canvas.Canvas(buffer, pagesize=letter, encrypt=encryption)
 
+    # 2. Setup Auto-Flowing Document Template
+    # Letter width is 612 pts. With 40pt margins, we have 532 pts of working width.
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=40,
+        bottomMargin=40,
+        encrypt=encryption
+    )
+    
+    elements = []
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "SalarySlipTitle",
-        parent=styles["Title"],
-        fontName="Helvetica-Bold",
-        fontSize=22,
-        leading=26,
-        textColor=colors.white,
-    )
-    small_style = ParagraphStyle(
-        "SalarySlipSmall",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=9,
-        leading=12,
-        textColor=colors.HexColor("#334155"),
-    )
-    label_style = ParagraphStyle(
-        "SalarySlipLabel",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor("#0F172A"),
-    )
-    value_style = ParagraphStyle(
-        "SalarySlipValue",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor("#0F172A"),
-    )
-
+    
+    # Modern SaaS Color Palette
+    TEXT_MAIN = colors.HexColor("#111827")     # Dark Charcoal
+    TEXT_MUTED = colors.HexColor("#6B7280")    # Gray
+    BORDER_LIGHT = colors.HexColor("#E5E7EB")  # Light Gray
+    BG_HEADER = colors.HexColor("#F9FAFB")     # Very subtle gray
+    
+    # Typography Styles
+    title_style = ParagraphStyle('Title', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=18, textColor=TEXT_MAIN, leading=22)
+    address_style = ParagraphStyle('Address', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=TEXT_MUTED, leading=12)
+    label_style = ParagraphStyle('Label', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=TEXT_MUTED)
+    value_style = ParagraphStyle('Value', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=TEXT_MAIN)
+    
     def money(value):
-        return f"Rs. {float(value):,.2f}"
+        return f"Rs. {float(value or 0):,.2f}"
 
-    def draw_panel(x, y, width, height, fill_color, stroke_color=None, radius=12):
-        pdf.setFillColor(fill_color)
-        pdf.setStrokeColor(stroke_color or fill_color)
-        pdf.roundRect(x, y, width, height, radius, fill=1, stroke=1 if stroke_color else 0)
-
-    def render_table(table_data, x, y, col_widths, style_commands):
-        table = Table(table_data, colWidths=col_widths)
-        table.setStyle(TableStyle(style_commands))
-        _, table_height = table.wrapOn(pdf, 0, 0)
-        table.drawOn(pdf, x, y - table_height)
-        return table_height
-
-    page_width, page_height = letter
-    margin = 38
-    content_width = page_width - (margin * 2)
-
-    # Page background
-    pdf.setFillColor(colors.HexColor("#F1F5F9"))
-    pdf.rect(0, 0, page_width, page_height, fill=1, stroke=0)
-    draw_panel(margin, 34, content_width, page_height - 68, colors.white)
-
-    # Header band
-    header_y = 690
-    draw_panel(margin, header_y, content_width, 94, colors.HexColor("#0F172A"))
-
-    logo_x = margin + 18
+    # --- HEADER SECTION ---
+    logo_flowable = ""
     if organization.logo_s3_key:
-        logo_img = fetch_logo_from_s3(organization.logo_s3_key)
-        if logo_img:
-            pdf.drawImage(logo_img, logo_x, header_y + 22, width=72, height=36, preserveAspectRatio=True, mask="auto")
-            logo_x += 92
+        logo_data = fetch_logo_from_s3(organization.logo_s3_key)
+        if logo_data:
+            # kind='proportional' ensures the logo scales elegantly without stretching
+            logo_flowable = Image(logo_data, width=120, height=40, kind='proportional')
 
-    title = Paragraph(organization.name, title_style)
-    title.wrapOn(pdf, content_width - 220, 28)
-    title.drawOn(pdf, logo_x, header_y + 52)
+    company_info = [
+        Paragraph(organization.name, title_style),
+        Paragraph(organization.address or "", address_style),
+    ]
+    
+    # Header Table: Logo on left, Company Info on right
+    header_table = Table(
+        [[logo_flowable, company_info]], 
+        colWidths=[132, 400]
+    )
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 25))
 
-    address_text = organization.address or ""
-    address = Paragraph(address_text, small_style)
-    address.wrapOn(pdf, content_width - 220, 18)
-    address.drawOn(pdf, logo_x, header_y + 34)
+    # --- DOCUMENT TITLE ---
+    doc_title = Table(
+        [[Paragraph(f"<font size=14 color='#111827'><b>Salary Slip</b></font><br/><font size=9 color='#6B7280'>Pay Period: {month_year}</font>", styles['Normal'])]],
+        colWidths=[532]
+    )
+    doc_title.setStyle(TableStyle([
+        ('LINEBELOW', (0,0), (-1,-1), 1, TEXT_MAIN),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+    ]))
+    elements.append(doc_title)
+    elements.append(Spacer(1, 15))
 
-    period = Paragraph(f"Salary Slip | {month_year}", small_style)
-    period.wrapOn(pdf, 200, 18)
-    period.drawOn(pdf, margin + content_width - 212, header_y + 54)
-
-    pdf.setFont("Helvetica", 8.5)
-    pdf.setFillColor(colors.HexColor("#CBD5E1"))
-    pdf.drawRightString(margin + content_width - 18, header_y + 34, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-    # Employee information section
-    section_y = 610
-    draw_panel(margin + 18, section_y, content_width - 36, 56, colors.HexColor("#E2E8F0"))
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(margin + 30, section_y + 33, "Employee Information")
-    pdf.setFont("Helvetica", 8.5)
-    pdf.setFillColor(colors.HexColor("#475569"))
-    pdf.drawString(margin + 30, section_y + 16, "Employee details and payroll period for this slip")
-
-    employee_rows = [
+    # --- EMPLOYEE INFORMATION ---
+    emp_data = [
         [Paragraph("Employee Name", label_style), Paragraph(employee.name, value_style), Paragraph("Employee ID", label_style), Paragraph(employee.employee_id, value_style)],
         [Paragraph("Designation", label_style), Paragraph(employee.designation, value_style), Paragraph("Email", label_style), Paragraph(employee.email, value_style)],
-        [Paragraph("Pay Period", label_style), Paragraph(month_year, value_style), Paragraph("Organization", label_style), Paragraph(organization.name, value_style)],
     ]
+    
+    emp_table = Table(emp_data, colWidths=[100, 166, 100, 166])
+    emp_table.setStyle(TableStyle([
+        ('LINEBELOW', (0,0), (-1,-1), 0.5, BORDER_LIGHT),
+        ('TOPPADDING', (0,0), (-1,-1), 10),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    elements.append(emp_table)
+    elements.append(Spacer(1, 25))
 
-    employee_table_height = render_table(
-        employee_rows,
-        margin + 18,
-        section_y - 8,
-        [100, 220, 96, 180],
-        [
-            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#CBD5E1")),
-            ("INNERGRID", (0, 0), (-1, -1), 0.55, colors.HexColor("#E2E8F0")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F8FAFC")),
-            ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#F8FAFC")),
-        ],
-    )
-
-    # Salary breakdown section
-    breakdown_y = section_y - employee_table_height - 34
-    draw_panel(margin + 18, breakdown_y, content_width - 36, 56, colors.HexColor("#E2E8F0"))
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(margin + 30, breakdown_y + 33, "Earnings & Deductions")
-    pdf.setFont("Helvetica", 8.5)
-    pdf.setFillColor(colors.HexColor("#475569"))
-    pdf.drawString(margin + 30, breakdown_y + 16, "Tabular breakdown of the salary components")
-
+    # --- EARNINGS & DEDUCTIONS ---
     gross_salary = float(slip.base_salary) + float(slip.hra) + float(slip.allowances)
-
-    breakdown_rows = [
-        [Paragraph("Earnings Head", label_style), Paragraph("Amount", label_style), Paragraph("Deductions Head", label_style), Paragraph("Amount", label_style)],
-        [Paragraph("Base Salary", value_style), Paragraph(money(slip.base_salary), value_style), Paragraph("Deductions", value_style), Paragraph(money(slip.deductions), value_style)],
-        [Paragraph("HRA", value_style), Paragraph(money(slip.hra), value_style), Paragraph("", value_style), Paragraph("", value_style)],
-        [Paragraph("Allowances", value_style), Paragraph(money(slip.allowances), value_style), Paragraph("", value_style), Paragraph("", value_style)],
-        [Paragraph("Gross Salary", label_style), Paragraph(money(gross_salary), label_style), Paragraph("Net Salary", label_style), Paragraph(money(slip.net_salary), label_style)],
+    
+    breakdown_data = [
+        ["Earnings Head", "Amount", "Deductions Head", "Amount"],
+        ["Base Salary", money(slip.base_salary), "Deductions", money(slip.deductions)],
+        ["HRA", money(slip.hra), "", ""],
+        ["Allowances", money(slip.allowances), "", ""],
+        ["Gross Earnings", money(gross_salary), "Total Deductions", money(slip.deductions)]
     ]
+    
+    breakdown_table = Table(breakdown_data, colWidths=[150, 116, 150, 116])
+    breakdown_table.setStyle(TableStyle([
+        # Header Row Styling
+        ('BACKGROUND', (0,0), (-1,0), BG_HEADER),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0,0), (-1,0), TEXT_MUTED),
+        ('FONTSIZE', (0,0), (-1,0), 9),
+        ('BOTTOMPADDING', (0,0), (-1,0), 10),
+        ('TOPPADDING', (0,0), (-1,0), 10),
+        
+        # Data Row Styling
+        ('FONTNAME', (0,1), (-1,-2), 'Helvetica'),
+        ('FONTSIZE', (0,1), (-1,-2), 10),
+        ('TEXTCOLOR', (0,1), (-1,-2), TEXT_MAIN),
+        ('BOTTOMPADDING', (0,1), (-1,-2), 8),
+        ('TOPPADDING', (0,1), (-1,-2), 8),
+        ('LINEBELOW', (0,1), (-1,-3), 0.5, BORDER_LIGHT), # Inner lines
+        
+        # Footer Row (Gross/Total) Styling
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,-1), (-1,-1), 10),
+        ('TEXTCOLOR', (0,-1), (-1,-1), TEXT_MAIN),
+        ('LINEABOVE', (0,-1), (-1,-1), 1, TEXT_MAIN),
+        ('TOPPADDING', (0,-1), (-1,-1), 10),
+    ]))
+    elements.append(breakdown_table)
+    elements.append(Spacer(1, 25))
 
-    breakdown_table_height = render_table(
-        breakdown_rows,
-        margin + 18,
-        breakdown_y - 8,
-        [165, 120, 165, 120],
-        [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#CBD5E1")),
-            ("INNERGRID", (0, 0), (-1, -1), 0.55, colors.HexColor("#E2E8F0")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BACKGROUND", (0, 4), (1, 4), colors.HexColor("#DBEAFE")),
-            ("BACKGROUND", (2, 4), (3, 4), colors.HexColor("#DCFCE7")),
-            ("FONTNAME", (0, 4), (1, 4), "Helvetica-Bold"),
-            ("FONTNAME", (2, 4), (3, 4), "Helvetica-Bold"),
-        ],
-    )
+    # --- NET PAY CALLOUT ---
+    net_pay_data = [
+        ["Net Salary Payable:", money(slip.net_salary)]
+    ]
+    # Sleek, minimal dark box for the final payout
+    net_pay_table = Table(net_pay_data, colWidths=[382, 150])
+    net_pay_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), TEXT_MAIN),
+        ('TEXTCOLOR', (0,0), (-1,-1), colors.white),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 12),
+        ('ALIGN', (0,0), (0,0), 'RIGHT'),
+        ('ALIGN', (1,0), (1,0), 'LEFT'),
+        ('TOPPADDING', (0,0), (-1,-1), 12),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 12),
+    ]))
+    elements.append(net_pay_table)
+    elements.append(Spacer(1, 40))
 
-    # Net pay callout
-    callout_y = breakdown_y - breakdown_table_height - 28
-    draw_panel(margin + 18, callout_y, content_width - 36, 56, colors.HexColor("#0F172A"))
-    pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(margin + 32, callout_y + 31, f"Net Salary Payable: {money(slip.net_salary)}")
-    pdf.setFont("Helvetica", 8.5)
-    pdf.setFillColor(colors.HexColor("#CBD5E1"))
-    pdf.drawString(margin + 32, callout_y + 14, "This is a system generated document and does not require a signature.")
-
-    # Footer message
-    pdf.setFont("Helvetica", 8.5)
-    pdf.setFillColor(colors.HexColor("#64748B"))
+    # --- FOOTER ---
+    footer_text = "This is a system generated document and does not require a signature."
     if organization.custom_message:
-        pdf.drawString(margin + 18, 70, organization.custom_message[:115])
-    pdf.drawRightString(margin + content_width - 18, 70, "Confidential payroll document")
+        footer_text += f"<br/><br/>{organization.custom_message}"
+        
+    elements.append(Paragraph(f"<font color='#9CA3AF'>{footer_text}</font>", label_style))
 
-    pdf.save()
+    # 3. Build and compile the PDF
+    doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()
 
