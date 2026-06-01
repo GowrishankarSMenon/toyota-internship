@@ -27,6 +27,10 @@ const SALARY_HEADERS = ["employee_id", "month_year", "base_salary", "hra", "allo
 type UploadStep = "roster-edit" | "salary-edit" | "preview" | "processing" | "success";
 type CsvRow = Record<string, string>;
 
+function normalizeHeader(header: string) {
+  return header.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
 const emptyRosterRow = (): CsvRow => ({
   employee_id: "",
   name: "",
@@ -92,7 +96,7 @@ function parseCsvRows(file: File) {
     const parsed = Papa.parse<Record<string, string>>(text, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (header) => header.trim().toLowerCase(),
+      transformHeader: normalizeHeader,
       transform: (value) => (typeof value === "string" ? value.trim() : value),
     });
 
@@ -104,7 +108,7 @@ function parseCsvRows(file: File) {
       .map((row) => {
         const normalized: CsvRow = {};
         Object.entries(row).forEach(([key, value]) => {
-          normalized[key.trim().toLowerCase()] = String(value ?? "").trim();
+          normalized[normalizeHeader(key)] = String(value ?? "").trim();
         });
         return normalized;
       })
