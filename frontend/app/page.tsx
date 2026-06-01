@@ -762,11 +762,16 @@ export default function LandingPage() {
         html, body {
           scrollbar-width: none;
           -ms-overflow-style: none;
-          cursor: none !important;
           overflow-x: hidden;
         }
         html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
         * { cursor: none !important; }
+
+        @media (hover: none), (pointer: coarse) {
+          html, body, * {
+            cursor: auto !important;
+          }
+        }
 
         @keyframes cardEnter {
           from { opacity: 0; transform: translateY(28px); }
@@ -794,7 +799,7 @@ export default function LandingPage() {
         }
       `}</style>
 
-      <CustomCursor />
+      {!isMobile && <CustomCursor />}
       <ParallaxParticles motionMode={motionMode} />
 
       {/* Fixed navigator — floats at 50vh, left-aligned to the left column */}
