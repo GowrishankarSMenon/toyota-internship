@@ -14,3 +14,6 @@ env/
 
 #testing
 test_csv/
+
+#workers
+aepp-worker_accessKeys.csv

@@ -41,23 +41,31 @@ async def upload_employees(
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
     content = await file.read()
-    decoded_content = content.decode('utf-8')
+    # THE FIX: 'utf-8-sig' automatically destroys hidden Windows/Excel BOM characters
+    decoded_content = content.decode('utf-8-sig') 
     csv_reader = csv.DictReader(StringIO(decoded_content))
     
     employee_data = []
     for row in csv_reader:
-        clean_row = {k.strip(): v.strip() for k, v in row.items()}
-        # Safely handle variations in CSV header names
+        # THE FIX: Convert all headers to lowercase to prevent Case-Sensitivity crashes
+        clean_row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
+        
+        # Look for the ID using any standard variation
+        emp_id = clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
+        
+        if not emp_id:
+            continue # Skip completely empty rows
+
         employee_data.append({
-            "id": clean_row.get("Employee ID", clean_row.get("employee_id")),
+            "id": emp_id,
             "organization_id": organization_id,
-            "name": clean_row.get("Name", clean_row.get("name")),
-            "email": clean_row.get("Email", clean_row.get("email")),
-            "designation": clean_row.get("Designation", clean_row.get("designation"))
+            "name": clean_row.get("name", "Unknown"),
+            "email": clean_row.get("email", "no-email@company.com"),
+            "designation": clean_row.get("designation", "Employee")
         })
         
     if not employee_data:
-        raise HTTPException(status_code=400, detail="The CSV file is empty or contains no valid data")
+        raise HTTPException(status_code=400, detail="The CSV file is empty or missing 'Employee ID' headers.")
 
     # Insert or Update employees
     stmt = pg_insert(Employee).values(employee_data)
@@ -88,26 +96,32 @@ async def preview_payroll(
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
     content = await file.read()
-    decoded_content = content.decode('utf-8')
+    # THE FIX: Remove hidden BOM characters here too
+    decoded_content = content.decode('utf-8-sig')
     csv_reader = csv.DictReader(StringIO(decoded_content))
     
     preview_data = []
     
     for row_num, row in enumerate(csv_reader, start=1):
-        clean_row = {k.strip(): v.strip() for k, v in row.items()}
-        emp_id = clean_row.get("Employee ID", clean_row.get("employee_id"))
+        # THE FIX: Lowercase headers
+        clean_row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
         
-        # Fetch employee details using the Employee ID as the primary key
+        emp_id = clean_row.get("employee id", clean_row.get("employee_id", clean_row.get("id")))
+        if not emp_id:
+            continue # Skip empty rows
+        
+        # Fetch employee details using the Employee ID
         result = await db.execute(select(Employee).where(Employee.id == emp_id, Employee.organization_id == organization_id))
         employee = result.scalar_one_or_none()
         
         if not employee:
-            raise HTTPException(status_code=404, detail=f"Employee ID {emp_id} in row {row_num} not found in database. Please upload them first.")
+            raise HTTPException(status_code=404, detail=f"Employee ID {emp_id} in row {row_num} not found in database. Please make sure the IDs match the Roster exactly.")
 
-        base = float(clean_row.get("Base Salary", 0))
-        hra = float(clean_row.get("HRA", 0))
-        allowances = float(clean_row.get("Allowances", 0))
-        deductions = float(clean_row.get("Deductions", 0))
+        # Safely extract financials
+        base = float(clean_row.get("base salary", clean_row.get("base_salary", 0)))
+        hra = float(clean_row.get("hra", 0))
+        allowances = float(clean_row.get("allowances", 0))
+        deductions = float(clean_row.get("deductions", 0))
         net = base + hra + allowances - deductions
 
         preview_data.append({
@@ -115,7 +129,7 @@ async def preview_payroll(
             "name": employee.name,
             "email": employee.email,
             "designation": employee.designation,
-            "month_year": clean_row.get("Month/Year", datetime.now().strftime("%B %Y")),
+            "month_year": clean_row.get("month/year", clean_row.get("month_year", datetime.now().strftime("%B %Y"))),
             "base_salary": base,
             "hra": hra,
             "allowances": allowances,
@@ -123,7 +137,6 @@ async def preview_payroll(
             "net_salary": net
         })
 
-    # Return the data so the frontend can build a preview table
     return {"preview": preview_data}
 
 
