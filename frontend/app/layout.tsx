@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { SmoothScroll } from "@/components/smooth-scroll";
+import { Analytics } from '@vercel/analytics/next';
 
 // Configure Inter exactly like the reference design
 const inter = Inter({ 
@@ -27,6 +28,7 @@ export default function RootLayout({
         <SmoothScroll>
         {children}
         </SmoothScroll>
+        <Analytics />
       </body>
     </html>
   );
